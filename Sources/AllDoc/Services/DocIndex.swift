@@ -10,6 +10,7 @@ final class DocIndex: @unchecked Sendable {
 
     struct Hit { let path: String; let snippet: String }
     struct Stamp { let mtime: Double; let size: Int64 }
+    struct FileRow { let path: String; let size: Int64; let mtime: Double }
 
     private var db: OpaquePointer?
     private let q = DispatchQueue(label: "AllDoc.docindex")
