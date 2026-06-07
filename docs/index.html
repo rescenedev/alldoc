@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AllDoc — macOS 문서 검색·관리 앱</title>
+<meta name="description" content="흩어진 문서를 한곳에서. 이름과 본문을 동시에 즉시 검색하는 macOS 네이티브 앱." />
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c232d; --line:#2a313c;
+    --fg:#e6edf3; --mut:#9aa7b4; --dim:#6b7681;
+    --accent:#3b82f6; --accent2:#2563eb; --star:#f5b30a;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard",sans-serif;
+    background:var(--bg);color:var(--fg);line-height:1.6;-webkit-font-smoothing:antialiased;
+  }
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1040px;margin:0 auto;padding:0 24px}
+  .btn{display:inline-block;padding:12px 22px;border-radius:10px;font-weight:600;font-size:15px;transition:.15s}
+  .btn-primary{background:var(--accent);color:#fff}
+  .btn-primary:hover{background:var(--accent2)}
+  .btn-ghost{border:1px solid var(--line);color:var(--fg)}
+  .btn-ghost:hover{border-color:var(--accent)}
+
+  /* hero */
+  header{padding:90px 0 60px;text-align:center;
+    background:radial-gradient(1200px 500px at 50% -10%, rgba(59,130,246,.18), transparent 70%);}
+  .badge{display:inline-block;font-size:13px;color:var(--accent);border:1px solid rgba(59,130,246,.4);
+    padding:5px 12px;border-radius:999px;margin-bottom:22px;background:rgba(59,130,246,.08)}
+  h1{font-size:clamp(38px,7vw,68px);font-weight:800;letter-spacing:-.02em;line-height:1.05}
+  h1 .grad{background:linear-gradient(90deg,#60a5fa,#3b82f6);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub{margin:22px auto 0;max-width:620px;font-size:19px;color:var(--mut)}
+  .cta{margin-top:34px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+  .install{margin-top:26px}
+  code.cmd{display:inline-block;background:var(--panel);border:1px solid var(--line);border-radius:8px;
+    padding:10px 16px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px;color:#cdd9e5}
+
+  /* mock window */
+  .shot{margin:60px auto 0;max-width:920px}
+  .win{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;
+    box-shadow:0 40px 90px -30px rgba(0,0,0,.7)}
+  .titlebar{display:flex;align-items:center;gap:14px;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--panel2)}
+  .lights{display:flex;gap:8px}.lights i{width:12px;height:12px;border-radius:50%;display:block}
+  .lights .r{background:#ff5f57}.lights .y{background:#febc2e}.lights .g{background:#28c840}
+  .search{flex:1;display:flex;justify-content:center}
+  .search .box{display:flex;align-items:center;gap:8px;width:min(380px,60%);background:#0d1117;border:1px solid var(--line);
+    border-radius:999px;padding:7px 14px;color:var(--dim);font-size:13px}
+  .seg{display:flex;gap:4px}.seg span{font-size:12px;padding:3px 11px;border-radius:999px;color:var(--mut)}
+  .seg .on{background:var(--accent);color:#fff}
+  .body{display:flex;min-height:300px}
+  .side{width:210px;border-right:1px solid var(--line);padding:14px;background:var(--panel2);font-size:13px}
+  .side .h{color:var(--dim);font-size:11px;margin:14px 0 6px}
+  .side .row{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:7px;color:var(--mut)}
+  .side .row.sel{background:var(--accent);color:#fff}
+  .list{flex:1;padding:6px 0}
+  .item{display:flex;align-items:center;gap:11px;padding:9px 16px;border-bottom:1px solid rgba(42,49,60,.5)}
+  .item .ic{width:26px;height:30px;border-radius:4px;background:#0d1117;border:1px solid var(--line);flex:none}
+  .item .meta{flex:1;min-width:0}
+  .item .nm{font-size:13px;display:flex;align-items:center;gap:6px}
+  .item .snip{font-size:11px;color:var(--dim)}
+  .item .snip b{color:#cdd9e5;font-weight:600}
+  .tag{font-size:10px;color:var(--mut);background:rgba(255,255,255,.06);padding:2px 7px;border-radius:999px}
+  .star{color:var(--star);font-size:10px}
+  .item.sel{background:var(--accent)}.item.sel .nm,.item.sel .snip,.item.sel .snip b{color:#fff}
+  .item.sel .tag{background:rgba(255,255,255,.2);color:#fff}
+
+  /* features */
+  section{padding:72px 0}
+  h2{font-size:30px;font-weight:800;letter-spacing:-.01em;text-align:center}
+  .lead{text-align:center;color:var(--mut);margin-top:10px}
+  .grid{margin-top:46px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:24px}
+  .card .em{font-size:24px}
+  .card h3{margin:12px 0 8px;font-size:17px}
+  .card p{color:var(--mut);font-size:14px}
+  .kbd{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:38px}
+  .kbd div{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 16px;font-size:14px;color:var(--mut)}
+  .kbd kbd{background:#0d1117;border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;padding:2px 8px;
+    font-family:ui-monospace,monospace;font-size:12px;color:#cdd9e5;margin-right:8px}
+  footer{border-top:1px solid var(--line);padding:34px 0;text-align:center;color:var(--dim);font-size:13px}
+  .stack{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:16px}
+  .stack span{font-size:12px;color:var(--mut);border:1px solid var(--line);border-radius:999px;padding:5px 12px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <span class="badge">macOS 14+ · 네이티브 SwiftUI</span>
+    <h1>흩어진 문서를<br><span class="grad">한곳에서, 즉시 검색</span></h1>
+    <p class="sub">파일 이름은 물론 <b>본문 내용까지</b> 동시에 찾는 macOS 문서 검색·관리 앱.
+      hwpx·docx·pptx·xlsx·pdf·md·txt 전부 지원합니다.</p>
+    <div class="cta">
+      <a class="btn btn-primary" href="https://github.com/rescenedev/alldoc">GitHub에서 보기</a>
+      <a class="btn btn-ghost" href="#install">설치하기</a>
+    </div>
+    <div class="install"><code class="cmd">brew install rescenedev/tap/alldoc</code></div>
+  </div>
+
+  <div class="wrap shot">
+    <div class="win">
+      <div class="titlebar">
+        <div class="lights"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+        <div class="search">
+          <div class="box">🔍 ‘전체 폴더’ 검색 ⌘K</div>
+        </div>
+        <div class="seg"><span class="on">이름</span><span>본문</span></div>
+      </div>
+      <div class="body">
+        <div class="side">
+          <div class="h">　</div>
+          <div class="row sel">▦ 전체 폴더</div>
+          <div class="row">★ 즐겨찾기 <span style="margin-left:auto;color:var(--dim)">3</span></div>
+          <div class="h">지정 폴더</div>
+          <div class="row">📁 Documents</div>
+          <div class="row">📁 Downloads</div>
+          <div class="row">📁 work</div>
+        </div>
+        <div class="list">
+          <div class="item sel">
+            <div class="ic"></div>
+            <div class="meta"><div class="nm">전략_2026.docx <span class="star">★</span></div>
+              <div class="snip">…클라우드 전환 <b>전략</b>과 예산 계획…</div></div>
+            <span class="tag">Word</span>
+          </div>
+          <div class="item">
+            <div class="ic"></div>
+            <div class="meta"><div class="nm">예산.xlsx</div>
+              <div class="snip">클라우드 <b>예산</b> 시트 3분기 합계</div></div>
+            <span class="tag">Excel</span>
+          </div>
+          <div class="item">
+            <div class="ic"></div>
+            <div class="meta"><div class="nm">발표자료.pptx</div>
+              <div class="snip">발표자료 클라우드 전환 로드맵</div></div>
+            <span class="tag">PPT</span>
+          </div>
+          <div class="item">
+            <div class="ic"></div>
+            <div class="meta"><div class="nm">계획서.hwpx</div>
+              <div class="snip">한글 문서 클라우드 전환 계획서</div></div>
+            <span class="tag">한글</span>
+          </div>
+          <div class="item">
+            <div class="ic"></div>
+            <div class="meta"><div class="nm">안내문.pdf</div>
+              <div class="snip">이 안에는 클라우드 전환 키워드…</div></div>
+            <span class="tag">PDF</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <h2>왜 AllDoc인가</h2>
+    <p class="lead">Spotlight가 못 찾는 것까지, 내가 정한 폴더 안에서 정확하게.</p>
+    <div class="grid">
+      <div class="card"><div class="em">⚡</div><h3>본문 전문검색 (FTS5)</h3>
+        <p>SQLite FTS5로 문서 본문을 인덱싱. 수만 개 문서도 즉시 검색하고 관련도순으로 정렬, 일치 부분을 스니펫으로 보여줍니다.</p></div>
+      <div class="card"><div class="em">🔍</div><h3>이름 + 본문 동시에</h3>
+        <p>이름·본문을 함께 또는 따로 검색. <code>*.md</code> 같은 글롭 패턴, 한글 부분검색도 지원합니다.</p></div>
+      <div class="card"><div class="em">📂</div><h3>내가 정한 폴더만</h3>
+        <p>관리할 폴더를 직접 지정. 전체 폴더·즐겨찾기·개별 폴더를 사이드바에서 오가며 봅니다.</p></div>
+      <div class="card"><div class="em">👁</div><h3>Finder식 미리보기</h3>
+        <p><b>Space</b>로 Quick Look, 미리보기 중 <b>↑/↓</b>로 다음 문서로 넘기기 — Finder와 똑같이.</p></div>
+      <div class="card"><div class="em">🚀</div><h3>대용량도 즉시</h3>
+        <p>폴더 목록 디스크 캐싱 + 백그라운드 증분 색인으로 3만 개 넘는 폴더도 끊김 없이 열립니다.</p></div>
+      <div class="card"><div class="em">🧩</div><h3>가벼운 네이티브</h3>
+        <p>SwiftUI + AppKit, 내장 SQLite 사용으로 외부 런타임 의존성 최소화. Xcode 없이 빌드됩니다.</p></div>
+    </div>
+
+    <div class="kbd">
+      <div><kbd>⌘K</kbd>검색</div>
+      <div><kbd>Space</kbd>미리보기</div>
+      <div><kbd>↑ ↓</kbd>이동</div>
+      <div><kbd>Enter</kbd>열기</div>
+      <div><kbd>⌘O</kbd>Finder에서 위치</div>
+    </div>
+  </div>
+</section>
+
+<section id="install" style="background:var(--panel2)">
+  <div class="wrap" style="max-width:720px">
+    <h2>설치</h2>
+    <p class="lead">Homebrew로 한 줄, 또는 소스에서 직접 빌드.</p>
+    <div style="margin-top:30px;display:grid;gap:18px">
+      <div class="card">
+        <h3>Homebrew</h3>
+        <p style="margin-bottom:12px">가장 간단한 방법입니다.</p>
+        <code class="cmd">brew install rescenedev/tap/alldoc</code>
+      </div>
+      <div class="card">
+        <h3>소스 빌드</h3>
+        <p style="margin-bottom:12px">macOS 14+, Swift 6 (Command Line Tools면 충분)</p>
+        <code class="cmd">git clone https://github.com/rescenedev/alldoc.git<br>cd alldoc &amp;&amp; ./build.sh release &amp;&amp; open build/AllDoc.app</code>
+      </div>
+    </div>
+    <div class="stack">
+      <span>SwiftUI + AppKit</span><span>SQLite FTS5</span><span>fd</span><span>fzf</span><span>PDFKit</span>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    AllDoc · MIT License · <a href="https://github.com/rescenedev/alldoc" style="color:var(--accent)">github.com/rescenedev/alldoc</a>
+  </div>
+</footer>
+
+</body>
+</html>
