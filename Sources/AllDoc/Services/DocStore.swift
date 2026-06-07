@@ -265,6 +265,7 @@ final class DocStore: ObservableObject {
         guard isFavoritesMode || !scopes.isEmpty else { return }
         searchTask?.cancel()
         loadTask?.cancel()
+        prewarmTask?.cancel()   // 검색 중에는 사전 색인을 멈춰 CPU 경쟁을 줄인다.
         searchTask = Task { [weak self] in
             guard let self else { return }
             if !immediate {
@@ -272,6 +273,10 @@ final class DocStore: ObservableObject {
                 if Task.isCancelled { return }
             }
             await self.runSearch(query: trimmed)
+            // 검색이 끝나고 취소되지 않았으면 남은 폴더를 마저 사전 색인.
+            if !Task.isCancelled, !self.isFavoritesMode {
+                self.startPrewarm(roots: self.scopes, types: self.enabledTypes)
+            }
         }
     }
 
@@ -305,6 +310,8 @@ final class DocStore: ObservableObject {
         items = []
         var acc: [DocFile] = []
         var idx: [URL: Int] = [:]
+        var lastPublish = Date.distantPast
+        // 스트리밍 중 매 배치마다 전체 재정렬+재렌더하면 비싸므로 ~120ms 간격으로만 반영.
         func upsert(_ batch: [DocFile], snippetsPreferred: Bool) {
             var changed = false
             for f in batch {
@@ -316,7 +323,10 @@ final class DocStore: ObservableObject {
                     idx[f.url] = acc.count; acc.append(f); changed = true
                 }
             }
-            if changed { items = sorted(acc) }
+            if changed, Date().timeIntervalSince(lastPublish) > 0.12 {
+                lastPublish = Date()
+                items = sorted(acc)
+            }
         }
 
         do {
@@ -333,6 +343,7 @@ final class DocStore: ObservableObject {
                 )
             }
             if Task.isCancelled { return }
+            items = sorted(acc)   // 최종 반영(쓰로틀로 누락된 마지막 배치 포함)
             statusText = acc.isEmpty
                 ? "‘\(query)’ 검색 결과 없음"
                 : "검색 결과 \(acc.count)개" + (acc.count >= SearchService.maxResults ? "+" : "")

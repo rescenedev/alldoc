@@ -157,29 +157,28 @@ enum SearchService {
             let doneCount = processed, foundCount = emitted
             await MainActor.run { progress("문서 색인 \(doneCount)/\(total) · 결과 \(foundCount)개") }
 
-            // 청크 동시 추출(NFD 캐시) → shadow경로 : 원본경로 매핑.
-            let pairs: [(String, String)] = await withTaskGroup(of: (String, String)?.self) { group in
+            // 청크 동시 추출(NFD 캐시). 추출 시 읽은 DocFile 을 그대로 들고 가 재-stat 을 피한다.
+            let triples: [(String, DocFile)] = await withTaskGroup(of: (String, DocFile)?.self) { group in
                 for path in chunk {
                     group.addTask {
                         let url = URL(fileURLWithPath: path)
                         guard let f = DocFile.read(from: url),
                               let shadow = await extractor.ensureExtracted(url, mtime: f.modified, size: f.size)
                         else { return nil }
-                        return (shadow.path, path)
+                        return (shadow.path, f)
                     }
                 }
-                var out: [(String, String)] = []
+                var out: [(String, DocFile)] = []
                 for await r in group { if let r { out.append(r) } }
                 return out
             }
             processed += chunk.count
-            guard !pairs.isEmpty else { continue }
+            guard !triples.isEmpty else { continue }
 
-            let shadowToOrig = Dictionary(pairs, uniquingKeysWith: { a, _ in a })
-            let matches = try await rgMatches(pattern: pattern, files: pairs.map { $0.0 })
+            let shadowToFile = Dictionary(triples, uniquingKeysWith: { a, _ in a })
+            let matches = try await rgMatches(pattern: pattern, files: triples.map { $0.0 })
             let docs: [DocFile] = matches.compactMap { shadow, snips in
-                guard let orig = shadowToOrig[shadow],
-                      var f = DocFile.read(from: URL(fileURLWithPath: orig)) else { return nil }
+                guard var f = shadowToFile[shadow] else { return nil }
                 f.snippets = snips
                 return f
             }
