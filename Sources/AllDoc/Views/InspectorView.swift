@@ -123,9 +123,8 @@ struct InspectorView: View {
                         .font(.system(size: 9))
                         .foregroundStyle(.tertiary)
                         .frame(width: 16, alignment: .trailing)
-                    Text(snippet.text)
+                    Highlighter.text(snippet.text)
                         .font(.system(size: 11))
-                        .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }

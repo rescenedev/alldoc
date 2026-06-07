@@ -8,7 +8,7 @@ struct FileGridItem: View {
     var body: some View {
         VStack(spacing: 6) {
             ZStack(alignment: .bottomTrailing) {
-                FileIcon(url: file.url, size: 64)
+                DocThumbnail(url: file.url, size: 64)
                     .shadow(color: .black.opacity(0.12), radius: 1, y: 1)
                 if let type = file.docType {
                     Text(file.ext.uppercased())
@@ -36,7 +36,7 @@ struct FileGridItem: View {
                 .foregroundStyle(isSelected ? Color.white : Color.primary)
 
             if let snippet = file.snippets.first {
-                Text(snippet.text)
+                Highlighter.text(snippet.text)
                     .font(.system(size: 9))
                     .lineLimit(2)
                     .foregroundStyle(.secondary)

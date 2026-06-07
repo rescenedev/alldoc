@@ -115,8 +115,9 @@ final class DocIndex: @unchecked Sendable {
             var hits: [Hit] = []
 
             if query.count >= 3 {
+                // char(1)/char(2) = 하이라이트 마커(뷰에서 굵게 렌더)
                 let sql = """
-                SELECT d.path, snippet(docs_fts, 0, '', '', '…', 12)
+                SELECT d.path, snippet(docs_fts, 0, char(1), char(2), '…', 12)
                 FROM docs_fts JOIN docs d ON d.id = docs_fts.rowid
                 WHERE docs_fts MATCH ? AND \(pathClause)
                 ORDER BY rank LIMIT ?;
@@ -249,13 +250,22 @@ final class DocIndex: @unchecked Sendable {
         }
     }
 
-    /// LIKE 폴백용: 본문에서 일치 부분이 포함된 줄을 짧게 잘라 스니펫으로.
+    /// LIKE 폴백용: 본문에서 일치 부분이 포함된 줄을 잘라, 일치 부분을 하이라이트 마커로 감싼다.
     private static func snippet(_ body: String, around needle: String) -> String {
         guard let r = body.range(of: needle, options: .caseInsensitive) else {
             return String(body.prefix(80))
         }
         let lineStart = body[..<r.lowerBound].lastIndex(of: "\n").map { body.index(after: $0) } ?? body.startIndex
         let lineEnd = body[r.upperBound...].firstIndex(of: "\n") ?? body.endIndex
-        return String(body[lineStart..<lineEnd]).trimmingCharacters(in: .whitespaces)
+        let line = body[lineStart..<lineEnd]
+        // 줄 안에서 일치 부분을 \u{1}…\u{2} 로 감싼다.
+        var marked = ""
+        if let lr = line.range(of: needle, options: .caseInsensitive) {
+            marked = String(line[line.startIndex..<lr.lowerBound]) + "\u{1}" +
+                     String(line[lr]) + "\u{2}" + String(line[lr.upperBound...])
+        } else {
+            marked = String(line)
+        }
+        return marked.trimmingCharacters(in: .whitespaces)
     }
 }

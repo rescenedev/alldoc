@@ -116,9 +116,10 @@ enum SearchService {
             }
             let input = nfdToOriginal.keys.joined(separator: "\n")
             let nfdQuery = trimmed.decomposedStringWithCanonicalMapping
+            // --delimiter / --nth -1: 경로 마지막 조각(=파일명)만 매칭(디렉토리명은 제외).
             let fzfResult = try await ProcessRunner.run(
                 fzf,
-                arguments: ["--filter", nfdQuery, "--no-sort"],
+                arguments: ["--filter", nfdQuery, "--no-sort", "--delimiter", "/", "--nth", "-1"],
                 stdin: Data(input.utf8)
             )
             try Task.checkCancellation()

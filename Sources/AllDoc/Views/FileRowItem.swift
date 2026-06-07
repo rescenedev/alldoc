@@ -45,7 +45,7 @@ struct FileRowItem: View {
                         Image(systemName: "text.quote")
                             .font(.system(size: 8))
                             .foregroundStyle(subColorDim)
-                        Text(snippet.text)
+                        Highlighter.text(snippet.text)
                             .font(.system(size: 10))
                             .foregroundStyle(subColor)
                             .lineLimit(1)

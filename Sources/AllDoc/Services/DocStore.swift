@@ -71,12 +71,29 @@ final class DocStore: ObservableObject {
     @Published private(set) var statusText = ""
     @Published private(set) var isSearchMode = false
 
+    // 상태 표시는 base(목록/검색 요약) + 색인 진행률을 합성. 새 UI 없이 기존 상태바 텍스트만 사용.
+    private var baseStatus = "" { didSet { recomputeStatus() } }
+    @Published private(set) var indexProgress: (done: Int, total: Int)? { didSet { recomputeStatus() } }
+
     let tools = ToolLocator.shared
 
     private let foldersKey = "AllDoc.managedFolders.v1"
     private var searchTask: Task<Void, Never>?
     private var loadTask: Task<Void, Never>?
     private var prewarmTask: Task<Void, Never>?
+    private var diskRefreshTask: Task<Void, Never>?
+    private lazy var watcher = FolderWatcher { [weak self] in
+        MainActor.assumeIsolated { self?.handleDiskChange() }
+    }
+
+    private func recomputeStatus() {
+        if let p = indexProgress, p.total > 0, p.done < p.total {
+            let prog = "본문 색인 \(p.done)/\(p.total)"
+            statusText = baseStatus.isEmpty ? prog : baseStatus + " · " + prog
+        } else {
+            statusText = baseStatus
+        }
+    }
 
     init() {
         managedFolders = DocStore.loadFolders(key: "AllDoc.managedFolders.v1")
@@ -217,20 +234,25 @@ final class DocStore: ObservableObject {
 
         // 즐겨찾기 모드: 저장된 파일들을 그대로 나열.
         if isFavoritesMode {
+            watcher.stop()
             let files = favorites.compactMap { DocFile.read(from: URL(fileURLWithPath: $0)) }
             items = sorted(files)
             isSearching = false
-            statusText = files.isEmpty ? "즐겨찾기가 없습니다" : "즐겨찾기 \(files.count)개"
+            baseStatus = files.isEmpty ? "즐겨찾기가 없습니다" : "즐겨찾기 \(files.count)개"
             if selection != nil, !files.contains(where: { $0.id == selection }) { selection = nil }
             return
         }
 
         let roots = scopes
         guard !roots.isEmpty else {
+            watcher.stop()
             items = []
-            statusText = "왼쪽에서 관리할 폴더를 추가하세요"
+            baseStatus = "왼쪽에서 관리할 폴더를 추가하세요"
             return
         }
+
+        // 실시간 반영: 현재 폴더 트리를 감시.
+        watcher.watch(roots.map { $0.path })
         let types = enabledTypes
         let sortK = sortKey, sortAsc = sortAscending
         let cap = SearchService.browseDisplayCap
@@ -240,7 +262,7 @@ final class DocStore: ObservableObject {
                                                   sortKey: sortK, ascending: sortAsc, limit: cap)
         items = first.items
         isSearching = first.items.isEmpty   // 비었으면 최초 색인 진행 중일 수 있음
-        statusText = first.items.isEmpty
+        baseStatus = first.items.isEmpty
             ? "문서 색인 중…"
             : browseSummary(total: first.total, shown: first.items.count) + " · 갱신 중…"
 
@@ -254,7 +276,7 @@ final class DocStore: ObservableObject {
                                                     sortKey: sortK, ascending: sortAsc, limit: cap)
             self.items = upd.items
             self.isSearching = false
-            self.statusText = self.browseSummary(total: upd.total, shown: upd.items.count)
+            self.baseStatus = self.browseSummary(total: upd.total, shown: upd.items.count)
             if self.selection != nil, !upd.items.contains(where: { $0.id == self.selection }) {
                 self.selection = nil
             }
@@ -265,8 +287,55 @@ final class DocStore: ObservableObject {
 
     private func startPrewarm(roots: [URL], types: Set<DocType>) {
         prewarmTask?.cancel()
-        prewarmTask = Task.detached(priority: .utility) {
-            await SearchService.prewarm(roots: roots, types: types)
+        prewarmTask = Task.detached(priority: .utility) { [weak self] in
+            let weakSelf = self
+            let update: @Sendable (Int, Int) -> Void = { done, total in
+                Task { @MainActor in weakSelf?.indexProgress = total > 0 ? (done, total) : nil }
+            }
+            await SearchService.ensureIndexed(roots: roots, types: types, progress: update)
+            await MainActor.run { weakSelf?.indexProgress = nil }
+        }
+    }
+
+    // MARK: - 실시간 반영 (FSEvents)
+
+    private func handleDiskChange() {
+        // FSEvents 가 1.5초로 이미 묶지만, 추가로 살짝 디바운스.
+        diskRefreshTask?.cancel()
+        diskRefreshTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard let self, !Task.isCancelled else { return }
+            self.refreshFromDisk()
+        }
+    }
+
+    private func refreshFromDisk() {
+        guard !isFavoritesMode else { return }
+        let roots = scopes
+        guard !roots.isEmpty else { return }
+        let types = enabledTypes
+        let sortK = sortKey, sortAsc = sortAscending
+        let cap = SearchService.browseDisplayCap
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        Task { [weak self] in
+            await Task.detached(priority: .utility) {
+                await SearchService.refreshFiles(roots: roots)
+            }.value
+            guard let self, !Task.isCancelled else { return }
+            if self.isSearchMode, !query.isEmpty {
+                await self.runSearch(query: query)   // 검색 중이면 결과 갱신
+            } else {
+                let upd = SearchService.browseFromIndex(roots: roots, types: types,
+                                                        sortKey: sortK, ascending: sortAsc, limit: cap)
+                self.items = upd.items
+                self.baseStatus = self.browseSummary(total: upd.total, shown: upd.items.count)
+                if self.selection != nil, !upd.items.contains(where: { $0.id == self.selection }) {
+                    self.selection = nil
+                }
+            }
+            // 본문 인덱스도 변경분 반영
+            self.startPrewarm(roots: roots, types: types)
         }
     }
 
@@ -298,7 +367,7 @@ final class DocStore: ObservableObject {
     private func runSearch(query: String) async {
         isSearchMode = true
         isSearching = true
-        statusText = "검색 중…"
+        baseStatus = "검색 중…"
         let types = enabledTypes
         let doName = nameEnabled
         let doContent = contentEnabled
@@ -312,9 +381,9 @@ final class DocStore: ObservableObject {
                     query: query, files: favURLs, nameEnabled: doName, contentEnabled: doContent)
                 if Task.isCancelled { return }
                 items = sorted(res)
-                statusText = res.isEmpty ? "‘\(query)’ 결과 없음" : "검색 결과 \(res.count)개"
+                baseStatus = res.isEmpty ? "‘\(query)’ 결과 없음" : "검색 결과 \(res.count)개"
             } catch is CancellationError { return }
-            catch { statusText = "검색 오류: \(error.localizedDescription)"; items = [] }
+            catch { baseStatus = "검색 오류: \(error.localizedDescription)"; items = [] }
             return
         }
 
@@ -357,13 +426,13 @@ final class DocStore: ObservableObject {
             }
             if Task.isCancelled { return }
             items = sorted(acc)   // 최종 반영(쓰로틀로 누락된 마지막 배치 포함)
-            statusText = acc.isEmpty
+            baseStatus = acc.isEmpty
                 ? "‘\(query)’ 검색 결과 없음"
                 : "검색 결과 \(acc.count)개" + (acc.count >= SearchService.maxResults ? "+" : "")
         } catch is CancellationError {
             return
         } catch {
-            statusText = "검색 오류: \(error.localizedDescription)"
+            baseStatus = "검색 오류: \(error.localizedDescription)"
             items = []
         }
     }
