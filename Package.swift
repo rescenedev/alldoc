@@ -10,6 +10,9 @@ let package = Package(
             path: "Sources/AllDoc",
             swiftSettings: [
                 .unsafeFlags(["-parse-as-library"])
+            ],
+            linkerSettings: [
+                .linkedLibrary("sqlite3")
             ]
         )
     ]

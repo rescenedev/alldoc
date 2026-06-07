@@ -178,7 +178,7 @@ struct BackendBadge: View {
         let missing = store.tools.missingRequired
         HStack(spacing: 6) {
             if missing.isEmpty {
-                Label("fd · rg · fzf", systemImage: "bolt.horizontal.circle")
+                Label("fd · fzf · SQLite FTS5", systemImage: "bolt.horizontal.circle")
                     .foregroundStyle(.secondary)
             } else {
                 Label("도구 없음: \(missing.joined(separator: ", "))", systemImage: "exclamationmark.triangle")

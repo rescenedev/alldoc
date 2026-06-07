@@ -106,89 +106,73 @@ enum SearchService {
         return rankedPaths.compactMap { DocFile.read(from: URL(fileURLWithPath: $0)) }
     }
 
-    // MARK: - 본문 검색 (텍스트 추출 → ripgrep)
+    // MARK: - 본문 검색 (SQLite FTS5)
 
-    /// 본문 검색(스트리밍). 결과가 나오는 대로 `onBatch` 로 흘려보낸다.
-    /// 1단계: 평문 파일(txt/md/csv/log…)은 추출 없이 ripgrep 으로 즉시 검색.
-    /// 2단계: pdf/office/hwpx 는 작은 청크로 추출→검색하며 진행 상황을 보고.
-    static func searchByContent(
-        query: String,
-        roots: [URL],
-        types: Set<DocType>,
-        progress: @MainActor @escaping (String) -> Void,
-        onBatch: @MainActor @escaping ([DocFile]) -> Void
-    ) async throws {
-        let pattern = query.trimmingCharacters(in: .whitespacesAndNewlines)
-            .decomposedStringWithCanonicalMapping
-        guard !pattern.isEmpty else { return }
+    /// 본문 검색: DocIndex(FTS5) 질의(즉시). 색인은 ensureIndexed/prewarm 이 백그라운드로 유지.
+    static func searchByContent(query: String, roots: [URL], types: Set<DocType>) async -> [DocFile] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !roots.isEmpty else { return [] }
+        let hits = DocIndex.shared.search(query: trimmed, rootPrefixes: roots.map { $0.path }, limit: maxResults)
+        return mapHits(hits, types: types)
+    }
+
+    private static func mapHits(_ hits: [DocIndex.Hit], types: Set<DocType>) -> [DocFile] {
+        let chosen = types.isEmpty ? Set(DocType.allCases) : types
+        return hits.compactMap { hit in
+            let url = URL(fileURLWithPath: hit.path)
+            guard let type = DocType.from(extension: url.pathExtension), chosen.contains(type) else { return nil }
+            guard var f = DocFile.read(from: url) else { return nil }   // 삭제된 파일(스테일 인덱스) 자동 제외
+            f.snippets = [ContentSnippet(lineNumber: 0, text: hit.snippet)]
+            return f
+        }
+    }
+
+    /// 루트 하위 추출 가능한 문서를 DocIndex 에 색인(변경분만). 백그라운드용.
+    static func ensureIndexed(roots: [URL], types: Set<DocType>,
+                              progress: (@Sendable (Int, Int) -> Void)? = nil) async {
         guard let fd = ToolLocator.shared.fd, !roots.isEmpty else { return }
-        guard ToolLocator.shared.rg != nil else { throw ProcessRunnerError.launchFailed("rg 없음") }
-
         let exts = extensions(for: types).filter { DocType.canExtractContent(extension: $0) }
         guard !exts.isEmpty else { return }
-
         var args = fdBaseArgs(exts: exts)
         args.append(".")
         args.append(contentsOf: roots.map { $0.path })
-
-        let fdResult = try await ProcessRunner.run(fd, arguments: args)
-        try Task.checkCancellation()
-        let candidates = fdResult.stdoutString
+        guard let result = try? await ProcessRunner.run(fd, arguments: args) else { return }
+        let paths = result.stdoutString
             .split(separator: "\n").map(String.init)
             .filter { !$0.isEmpty }
-            .prefix(maxExtractFiles).map { $0 }
-        guard !candidates.isEmpty else { return }
+            .prefix(maxExtractFiles)
 
-        // 정규화 주의: Process 가 argv 를 NFD 로 바꾸므로 질의는 항상 NFD 로 도착한다.
-        // 따라서 원본을 직접 검색하지 않고, 모든 문서를 NFD 캐시로 추출해 검색한다.
-        // 단, 추출이 싼 평문 파일을 먼저 처리해 결과가 빨리 뜨도록 순서를 잡는다.
-        let cheapExts: Set<String> = ["txt", "text", "log", "md", "markdown", "mdown", "csv", "tsv"]
-        let ordered = candidates.sorted { a, b in
-            let ca = cheapExts.contains((a as NSString).pathExtension.lowercased())
-            let cb = cheapExts.contains((b as NSString).pathExtension.lowercased())
-            return ca && !cb   // 평문 먼저
+        let stamps = DocIndex.shared.allStamps()
+        var toIndex: [(path: String, mtime: Double, size: Int64)] = []
+        for p in paths {
+            guard let f = DocFile.read(from: URL(fileURLWithPath: p)) else { continue }
+            let m = f.modified.timeIntervalSinceReferenceDate
+            if let s = stamps[p], s.mtime == m, s.size == f.size { continue }
+            toIndex.append((p, m, f.size))
         }
+        let total = toIndex.count
+        guard total > 0 else { progress?(0, 0); return }
 
-        let extractor = TextExtractor.shared
-        let total = ordered.count
-        var processed = 0
-        var emitted = 0
-
-        for chunk in ordered.chunked(into: 16) {
-            try Task.checkCancellation()
-            let doneCount = processed, foundCount = emitted
-            await MainActor.run { progress("문서 색인 \(doneCount)/\(total) · 결과 \(foundCount)개") }
-
-            // 청크 동시 추출(NFD 캐시). 추출 시 읽은 DocFile 을 그대로 들고 가 재-stat 을 피한다.
-            let triples: [(String, DocFile)] = await withTaskGroup(of: (String, DocFile)?.self) { group in
-                for path in chunk {
-                    group.addTask {
-                        let url = URL(fileURLWithPath: path)
-                        guard let f = DocFile.read(from: url),
-                              let shadow = await extractor.ensureExtracted(url, mtime: f.modified, size: f.size)
-                        else { return nil }
-                        return (shadow.path, f)
+        var done = 0
+        for chunk in toIndex.chunked(into: 24) {
+            if Task.isCancelled { return }
+            let rows: [(path: String, mtime: Double, size: Int64, body: String)] =
+                await withTaskGroup(of: (String, Double, Int64, String)?.self) { group in
+                    for item in chunk {
+                        group.addTask {
+                            guard let body = await TextExtractor.extractText(from: URL(fileURLWithPath: item.path))
+                            else { return nil }
+                            return (item.path, item.mtime, item.size, body)
+                        }
                     }
+                    var out: [(String, Double, Int64, String)] = []
+                    for await r in group { if let r { out.append((r.0, r.1, r.2, r.3)) } }
+                    return out
                 }
-                var out: [(String, DocFile)] = []
-                for await r in group { if let r { out.append(r) } }
-                return out
-            }
-            processed += chunk.count
-            guard !triples.isEmpty else { continue }
-
-            let shadowToFile = Dictionary(triples, uniquingKeysWith: { a, _ in a })
-            let matches = try await rgMatches(pattern: pattern, files: triples.map { $0.0 })
-            let docs: [DocFile] = matches.compactMap { shadow, snips in
-                guard var f = shadowToFile[shadow] else { return nil }
-                f.snippets = snips
-                return f
-            }
-            if !docs.isEmpty { emitted += docs.count; await MainActor.run { onBatch(docs) } }
-            extractor.flush()
-            if emitted >= maxResults { break }
+            DocIndex.shared.upsert(rows)
+            done += chunk.count
+            progress?(done, total)
         }
-        extractor.flush(force: true)
     }
 
     // MARK: - 특정 파일 집합(즐겨찾기 등) 안에서 검색
@@ -223,73 +207,41 @@ enum SearchService {
             }
         }
 
-        // 본문 매칭 (추출 → rg)
+        // 본문 매칭: 즐겨찾기 파일들을 색인(변경분만)한 뒤 DocIndex 에서 정확 경로로 질의.
         if contentEnabled {
-            let extractor = TextExtractor.shared
             let extractable = files.filter { DocType.canExtractContent(extension: $0.pathExtension) }
-            let pairs: [(String, String)] = await withTaskGroup(of: (String, String)?.self) { group in
-                for url in extractable {
-                    group.addTask {
-                        guard let f = DocFile.read(from: url),
-                              let shadow = await extractor.ensureExtracted(url, mtime: f.modified, size: f.size)
-                        else { return nil }
-                        return (shadow.path, url.path)
+            let stamps = DocIndex.shared.allStamps()
+            let rows: [(path: String, mtime: Double, size: Int64, body: String)] =
+                await withTaskGroup(of: (String, Double, Int64, String)?.self) { group in
+                    for url in extractable {
+                        group.addTask {
+                            guard let f = DocFile.read(from: url) else { return nil }
+                            let m = f.modified.timeIntervalSinceReferenceDate
+                            if let s = stamps[url.path], s.mtime == m, s.size == f.size { return nil }
+                            guard let body = await TextExtractor.extractText(from: url) else { return nil }
+                            return (url.path, m, f.size, body)
+                        }
                     }
+                    var out: [(String, Double, Int64, String)] = []
+                    for await r in group { if let r { out.append((r.0, r.1, r.2, r.3)) } }
+                    return out
                 }
-                var out: [(String, String)] = []
-                for await r in group { if let r { out.append(r) } }
-                return out
-            }
-            extractor.flush(force: true)
-            if !pairs.isEmpty {
-                let shadowToOrig = Dictionary(pairs, uniquingKeysWith: { a, _ in a })
-                let matches = try await rgMatches(pattern: trimmed.decomposedStringWithCanonicalMapping,
-                                                  files: pairs.map { $0.0 })
-                for (shadow, snips) in matches {
-                    guard let orig = shadowToOrig[shadow],
-                          var f = DocFile.read(from: URL(fileURLWithPath: orig)) else { continue }
-                    f.snippets = snips
-                    add(f)
-                }
+            DocIndex.shared.upsert(rows)
+            let hits = DocIndex.shared.search(query: trimmed, exactPaths: extractable.map { $0.path }, limit: maxResults)
+            for hit in hits {
+                guard var f = DocFile.read(from: URL(fileURLWithPath: hit.path)) else { continue }
+                f.snippets = [ContentSnippet(lineNumber: 0, text: hit.snippet)]
+                add(f)
             }
         }
 
         return order.compactMap { byURL[$0] }
     }
 
-    // MARK: - 백그라운드 사전 색인 (폴더 선택 시 캐시 미리 데우기)
+    // MARK: - 백그라운드 사전 색인 (폴더 선택 시)
 
     static func prewarm(roots: [URL], types: Set<DocType>) async {
-        guard let fd = ToolLocator.shared.fd, !roots.isEmpty else { return }
-        let exts = extensions(for: types).filter { DocType.canExtractContent(extension: $0) }
-        guard !exts.isEmpty else { return }
-
-        var args = fdBaseArgs(exts: exts)
-        args.append(".")
-        args.append(contentsOf: roots.map { $0.path })
-
-        guard let result = try? await ProcessRunner.run(fd, arguments: args) else { return }
-        let files = result.stdoutString
-            .split(separator: "\n").map(String.init)
-            .filter { !$0.isEmpty }
-            .prefix(maxExtractFiles).map { $0 }
-        let extractor = TextExtractor.shared
-
-        for chunk in files.chunked(into: 16) {
-            if Task.isCancelled { extractor.flush(force: true); return }
-            await withTaskGroup(of: Void.self) { group in
-                for path in chunk {
-                    group.addTask {
-                        if Task.isCancelled { return }
-                        let url = URL(fileURLWithPath: path)
-                        guard let f = DocFile.read(from: url) else { return }
-                        _ = await extractor.ensureExtracted(url, mtime: f.modified, size: f.size)
-                    }
-                }
-            }
-            extractor.flush()
-        }
-        extractor.flush(force: true)
+        await ensureIndexed(roots: roots, types: types)
     }
 
     // MARK: - 보조
@@ -306,37 +258,6 @@ enum SearchService {
         return a
     }
 
-    /// 주어진 파일들에 대해 ripgrep 을 돌려 (파일경로, 스니펫들) 목록을 매칭 순서대로 반환.
-    private static func rgMatches(pattern: String, files: [String]) async throws -> [(String, [ContentSnippet])] {
-        guard let rg = ToolLocator.shared.rg, !files.isEmpty else { return [] }
-        var args = ["--json", "--smart-case", "--fixed-strings", "--max-count", "6", "--max-columns", "300", "--", pattern]
-        args.append(contentsOf: files)
-        let result = try await ProcessRunner.run(rg, arguments: args)
-        try Task.checkCancellation()
-
-        var byPath: [String: [ContentSnippet]] = [:]
-        var order: [String] = []
-        for line in result.stdoutString.split(separator: "\n") {
-            guard let data = line.data(using: .utf8),
-                  let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  obj["type"] as? String == "match",
-                  let payload = obj["data"] as? [String: Any],
-                  let pathInfo = payload["path"] as? [String: Any],
-                  let p = pathInfo["text"] as? String,
-                  let linesInfo = payload["lines"] as? [String: Any],
-                  let text = linesInfo["text"] as? String
-            else { continue }
-            let n = (payload["line_number"] as? Int) ?? 0
-            if byPath[p] == nil { byPath[p] = []; order.append(p) }
-            if byPath[p]!.count < 5 {
-                byPath[p]!.append(ContentSnippet(
-                    lineNumber: n,
-                    text: text.trimmingCharacters(in: .whitespacesAndNewlines)
-                ))
-            }
-        }
-        return order.map { ($0, byPath[$0] ?? []) }
-    }
 }
 
 extension Array {

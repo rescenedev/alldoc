@@ -38,11 +38,10 @@ enum Main {
                 if byName.isEmpty { print("  (없음)") }
 
                 print("\n[본문 검색]")
-                var byContent: [DocFile] = []
-                try await SearchService.searchByContent(
-                    query: query, roots: [scope], types: Set(DocType.allCases),
-                    progress: { _ in },
-                    onBatch: { batch in byContent.append(contentsOf: batch) })
+                // FTS 인덱스 먼저 구축
+                await SearchService.ensureIndexed(roots: [scope], types: Set(DocType.allCases))
+                let byContent = await SearchService.searchByContent(
+                    query: query, roots: [scope], types: Set(DocType.allCases))
                 for f in byContent {
                     print("  • \(f.name)")
                     for s in f.snippets.prefix(1) {

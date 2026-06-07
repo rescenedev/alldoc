@@ -43,8 +43,7 @@ struct ToolLocator {
     var missingRequired: [String] {
         var missing: [String] = []
         if fd == nil { missing.append("fd") }
-        if rg == nil { missing.append("ripgrep (rg)") }
-        if fzf == nil { missing.append("fzf") }
+        if fzf == nil { missing.append("fzf") }   // 본문검색은 SQLite FTS5 사용(rg 불필요)
         return missing
     }
 }

@@ -357,11 +357,9 @@ final class DocStore: ObservableObject {
                 upsert(result, snippetsPreferred: false)
             }
             if doContent {
-                try await SearchService.searchByContent(
-                    query: query, roots: roots, types: types,
-                    progress: { [weak self] msg in self?.statusText = msg },
-                    onBatch: { batch in upsert(batch, snippetsPreferred: true) }
-                )
+                let res = await SearchService.searchByContent(query: query, roots: roots, types: types)
+                if Task.isCancelled { return }
+                upsert(res, snippetsPreferred: true)
             }
             if Task.isCancelled { return }
             items = sorted(acc)   // 최종 반영(쓰로틀로 누락된 마지막 배치 포함)

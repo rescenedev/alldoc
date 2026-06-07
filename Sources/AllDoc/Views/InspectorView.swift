@@ -119,10 +119,10 @@ struct InspectorView: View {
                 .foregroundStyle(.secondary)
             ForEach(file.snippets) { snippet in
                 HStack(alignment: .top, spacing: 6) {
-                    Text("\(snippet.lineNumber)")
-                        .font(.system(size: 9, design: .monospaced))
+                    Image(systemName: "text.quote")
+                        .font(.system(size: 9))
                         .foregroundStyle(.tertiary)
-                        .frame(width: 28, alignment: .trailing)
+                        .frame(width: 16, alignment: .trailing)
                     Text(snippet.text)
                         .font(.system(size: 11))
                         .textSelection(.enabled)
