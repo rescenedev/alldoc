@@ -1,7 +1,7 @@
 class Alldoc < Formula
   desc "Native macOS document search & manager (name + full-text)"
   homepage "https://github.com/rescenedev/alldoc"
-  url "https://github.com/rescenedev/alldoc/releases/download/v0.1.1/AllDoc-v0.1.1.zip"
+  url "https://github.com/rescenedev/alldoc/releases/download/v0.1.1/AllDoc.app-0.1.1.zip"
   sha256 "2fadd4515fae95c02032c0dbe28a2c815c299cc3290e161f6ba655f050d34c0f"
   version "0.1.1"
   license "MIT"
@@ -13,7 +13,14 @@ class Alldoc < Formula
   depends_on macos: :sonoma # macOS 14+
 
   def install
-    prefix.install "AllDoc.app"
+    # zip 레이아웃에 상관없이 동작: 최상위에 AllDoc.app 이 있으면 그대로,
+    # Homebrew 가 단일 디렉터리(AllDoc.app)로 자동 진입한 경우엔 현재 내용으로 재구성.
+    app = Dir["**/AllDoc.app"].first
+    if app
+      prefix.install app
+    else
+      (prefix/"AllDoc.app").install Dir["*"]
+    end
   end
 
   def caveats
