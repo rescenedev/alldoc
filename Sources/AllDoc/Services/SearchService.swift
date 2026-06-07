@@ -4,7 +4,8 @@ import Foundation
 enum SearchService {
     static let maxResults = 800
     static let maxExtractFiles = 6000
-    static let browseCap = 50000
+    static let browseCap = 50000        // 최근순 선정을 위해 stat 하는 최대 개수
+    static let browseDisplayCap = 2000  // 화면에 실제로 올리는 최대 개수(전체는 검색으로)
 
     // MARK: - 폴더 아래 모든 문서를 평탄하게 나열 (fd 재귀)
     // 호출 측에서 detached 로 실행해 stat 부하를 메인 스레드 밖에서 처리한다.

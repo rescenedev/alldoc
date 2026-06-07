@@ -19,6 +19,16 @@ enum BrowseCache {
         let created: Double
     }
 
+    private struct Payload: Codable {
+        let total: Int          // 전체 문서 수(표시는 일부만)
+        let entries: [Entry]    // 표시용 상위 N개
+    }
+
+    struct Cached {
+        let files: [DocFile]
+        let total: Int
+    }
+
     private static func keyURL(roots: [URL], types: Set<DocType>) -> URL {
         let rootsPart = roots.map { $0.path }.sorted().joined(separator: "\n")
         let typesPart = types.map { $0.rawValue }.sorted().joined(separator: ",")
@@ -27,20 +37,21 @@ enum BrowseCache {
         return dir.appendingPathComponent(hex).appendingPathExtension("json")
     }
 
-    static func load(roots: [URL], types: Set<DocType>) -> [DocFile]? {
+    static func load(roots: [URL], types: Set<DocType>) -> Cached? {
         guard let data = try? Data(contentsOf: keyURL(roots: roots, types: types)),
-              let entries = try? JSONDecoder().decode([Entry].self, from: data),
-              !entries.isEmpty else { return nil }
-        return entries.map {
+              let payload = try? JSONDecoder().decode(Payload.self, from: data),
+              !payload.entries.isEmpty else { return nil }
+        let files = payload.entries.map {
             DocFile(url: URL(fileURLWithPath: $0.path),
                     isDirectory: $0.isDir,
                     size: $0.size,
                     modified: Date(timeIntervalSinceReferenceDate: $0.modified),
                     created: Date(timeIntervalSinceReferenceDate: $0.created))
         }
+        return Cached(files: files, total: payload.total)
     }
 
-    static func save(roots: [URL], types: Set<DocType>, files: [DocFile]) {
+    static func save(roots: [URL], types: Set<DocType>, files: [DocFile], total: Int) {
         let entries = files.map {
             Entry(path: $0.url.path,
                   isDir: $0.isDirectory,
@@ -48,7 +59,7 @@ enum BrowseCache {
                   modified: $0.modified.timeIntervalSinceReferenceDate,
                   created: $0.created.timeIntervalSinceReferenceDate)
         }
-        if let data = try? JSONEncoder().encode(entries) {
+        if let data = try? JSONEncoder().encode(Payload(total: total, entries: entries)) {
             try? data.write(to: keyURL(roots: roots, types: types))
         }
     }
