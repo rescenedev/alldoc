@@ -232,15 +232,34 @@ final class DocStore: ObservableObject {
             return
         }
         let types = enabledTypes
-        isSearching = true
-        statusText = "문서 불러오는 중…"
+
+        // 1) 캐시가 있으면 즉시 표시(큰 폴더도 팍 열림). 캐시는 정렬된 채 저장되므로 재정렬 없이 바로.
+        let cached = BrowseCache.load(roots: roots, types: types)
+        if let cached {
+            items = cached
+            isSearching = false
+            statusText = "문서 \(cached.count)개 · 갱신 중…"
+        } else {
+            items = []
+            isSearching = true
+            statusText = "문서 불러오는 중…"
+        }
+
+        // 2) 백그라운드 최신화. stat·정렬·캐시 저장을 모두 detached(off-main)에서 끝내고
+        //    완성된 목록만 메인에서 한 번 교체 → 메인 스레드 버벅임 없음.
+        let sortK = sortKey, sortAsc = sortAscending
         loadTask = Task { [weak self] in
-            let result = (try? await SearchService.listDocuments(roots: roots, types: types)) ?? []
+            let sortedResult = (try? await Task.detached(priority: .userInitiated) { () -> [DocFile] in
+                let files = try await SearchService.listDocuments(roots: roots, types: types)
+                let result = DocStore.sortFiles(files, key: sortK, ascending: sortAsc)
+                BrowseCache.save(roots: roots, types: types, files: result)
+                return result
+            }.value) ?? []
             guard let self, !Task.isCancelled else { return }
-            self.items = self.sorted(result)
+            self.items = sortedResult
             self.isSearching = false
-            self.statusText = self.summary(count: result.count, capped: result.count >= SearchService.browseCap)
-            if self.selection != nil, !result.contains(where: { $0.id == self.selection }) {
+            self.statusText = self.summary(count: sortedResult.count, capped: sortedResult.count >= SearchService.browseCap)
+            if self.selection != nil, !sortedResult.contains(where: { $0.id == self.selection }) {
                 self.selection = nil
             }
         }
@@ -358,9 +377,13 @@ final class DocStore: ObservableObject {
     // MARK: - 정렬
 
     func sorted(_ files: [DocFile]) -> [DocFile] {
-        return files.sorted { a, b in
-            let asc = sortAscending
-            switch sortKey {
+        DocStore.sortFiles(files, key: sortKey, ascending: sortAscending)
+    }
+
+    /// off-main 에서도 정렬할 수 있도록 한 static 헬퍼.
+    nonisolated static func sortFiles(_ files: [DocFile], key: SortKey, ascending asc: Bool) -> [DocFile] {
+        files.sorted { a, b in
+            switch key {
             case .name:
                 let r = a.name.localizedStandardCompare(b.name)
                 return asc ? r == .orderedAscending : r == .orderedDescending

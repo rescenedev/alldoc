@@ -4,9 +4,10 @@ import Foundation
 enum SearchService {
     static let maxResults = 800
     static let maxExtractFiles = 6000
-    static let browseCap = 4000
+    static let browseCap = 50000
 
     // MARK: - 폴더 아래 모든 문서를 평탄하게 나열 (fd 재귀)
+    // 호출 측에서 detached 로 실행해 stat 부하를 메인 스레드 밖에서 처리한다.
 
     static func listDocuments(roots: [URL], types: Set<DocType>) async throws -> [DocFile] {
         guard let fd = ToolLocator.shared.fd, !roots.isEmpty else { return [] }
