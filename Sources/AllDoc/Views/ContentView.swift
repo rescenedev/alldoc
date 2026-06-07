@@ -10,6 +10,8 @@ struct ContentView: View {
     @State private var showInspector = false   // 기본은 목록 중심, 미리보기는 Space(Quick Look)
     @State private var showSidebar = true
     @FocusState private var searchFocused: Bool
+    @AppStorage("inspectorWidth") private var inspectorWidth: Double = 460
+    @State private var dragStartWidth: Double?
 
     var body: some View {
         // NavigationStack 으로 네이티브 통합 툴바를 한 줄로 쓴다(신호등 세로 중앙 정렬).
@@ -29,9 +31,11 @@ struct ContentView: View {
                 }
                 .frame(maxWidth: .infinity)
                 if showInspector {
-                    VSep()
+                    inspectorResizeHandle
                     InspectorView()
-                        .frame(width: 320)
+                        .frame(width: inspectorWidth)
+                        // Quick Look(NSView)이 통합 툴바 위로 그려지는 것 방지: 툴바 높이만큼 아래에서 시작.
+                        .padding(.top, 52)
                         .transition(.move(edge: .trailing))
                 }
             }
@@ -41,6 +45,32 @@ struct ContentView: View {
         }
         .onChange(of: store.focusSearchPulse) { searchFocused = true }
         .frame(minWidth: 900, minHeight: 580)
+    }
+
+    // 인스펙터 폭 조절 드래그 핸들 (1px 선 + 10px 히트영역).
+    private var inspectorResizeHandle: some View {
+        Rectangle()
+            .fill(Color(nsColor: .separatorColor))
+            .frame(width: 1)
+            .overlay(
+                Color.clear
+                    .frame(width: 10)
+                    .contentShape(Rectangle())
+                    .onHover { inside in
+                        if inside { NSCursor.resizeLeftRight.set() } else { NSCursor.arrow.set() }
+                    }
+                    .gesture(
+                        DragGesture()
+                            .onChanged { v in
+                                if dragStartWidth == nil { dragStartWidth = inspectorWidth }
+                                let start = dragStartWidth ?? inspectorWidth
+                                // 최대 = 창 폭의 약 62%(화면 절반 이상까지 허용)
+                                let maxW = Double(NSApp.keyWindow?.frame.width ?? 1800) * 0.62
+                                inspectorWidth = min(maxW, max(320, start - Double(v.translation.width)))
+                            }
+                            .onEnded { _ in dragStartWidth = nil }
+                    )
+            )
     }
 
     @ToolbarContentBuilder

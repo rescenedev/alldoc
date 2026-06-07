@@ -157,6 +157,30 @@ final class DocIndex: @unchecked Sendable {
         }
     }
 
+    /// 특정 문서 본문에서 질의가 포함된 줄들을 (마커로 감싸) 여러 개 반환. 인스펙터에서 "어디에" 표시용.
+    func matchLines(path: String, query rawQuery: String, limit: Int) -> [String] {
+        let query = rawQuery.trimmingCharacters(in: .whitespacesAndNewlines).precomposedStringWithCanonicalMapping
+        guard !query.isEmpty else { return [] }
+        return q.sync {
+            var stmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, "SELECT body FROM docs WHERE path=?;", -1, &stmt, nil) == SQLITE_OK else { return [] }
+            defer { sqlite3_finalize(stmt) }
+            sqlite3_bind_text(stmt, 1, path, -1, transient)
+            guard sqlite3_step(stmt) == SQLITE_ROW, let c = sqlite3_column_text(stmt, 0) else { return [] }
+            let body = String(cString: c)
+            var out: [String] = []
+            for rawLine in body.split(separator: "\n") {
+                let line = rawLine.trimmingCharacters(in: .whitespaces)
+                guard !line.isEmpty, let r = line.range(of: query, options: .caseInsensitive) else { continue }
+                let marked = String(line[line.startIndex..<r.lowerBound]) + "\u{1}" +
+                             String(line[r]) + "\u{2}" + String(line[r.upperBound...])
+                out.append(marked.count > 200 ? String(marked.prefix(200)) + "…" : marked)
+                if out.count >= limit { break }
+            }
+            return out
+        }
+    }
+
     // MARK: - 브라우즈 파일 메타데이터
 
     private func likeClause(_ prefixes: [String]) -> String {

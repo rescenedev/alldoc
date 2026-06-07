@@ -324,7 +324,7 @@ final class DocStore: ObservableObject {
             }.value
             guard let self, !Task.isCancelled else { return }
             if self.isSearchMode, !query.isEmpty {
-                await self.runSearch(query: query)   // 검색 중이면 결과 갱신
+                await self.runSearch(query: query, silent: true)   // 검색 중이면 조용히 결과 갱신
             } else {
                 let upd = SearchService.browseFromIndex(roots: roots, types: types,
                                                         sortKey: sortK, ascending: sortAsc, limit: cap)
@@ -364,10 +364,12 @@ final class DocStore: ObservableObject {
         }
     }
 
-    private func runSearch(query: String) async {
+    private func runSearch(query: String, silent: Bool = false) async {
         isSearchMode = true
-        isSearching = true
-        baseStatus = "검색 중…"
+        if !silent {                 // 워처가 유발한 백그라운드 재검색은 spinner/상태를 건드리지 않음
+            isSearching = true
+            baseStatus = "검색 중…"
+        }
         let types = enabledTypes
         let doName = nameEnabled
         let doContent = contentEnabled
@@ -391,7 +393,7 @@ final class DocStore: ObservableObject {
         guard !roots.isEmpty else { return }
 
         // 이름·본문 결과를 합쳐서(중복 제거) 채운다. 본문 스니펫이 있으면 갱신.
-        items = []
+        // 검색 중에는 이전 결과를 유지하다가 새 결과가 준비되면 교체(빈 화면 깜박임 방지).
         var acc: [DocFile] = []
         var idx: [URL: Int] = [:]
         var lastPublish = Date.distantPast

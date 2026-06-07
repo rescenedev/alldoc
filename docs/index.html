@@ -41,7 +41,7 @@
   code.cmd:hover{border-color:var(--accent)}
   code.cmd .copy{position:absolute;top:8px;right:8px;font-size:11px;font-family:-apple-system,sans-serif;
     color:var(--accent);background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.35);
-    border-radius:6px;padding:3px 9px;user-select:none}
+    border-radius:6px;padding:4px 9px;user-select:none;font-size:13px;line-height:1}
   code.cmd.copied{border-color:rgba(40,200,64,.45)}
   code.cmd.copied .copy{color:#28c840;background:rgba(40,200,64,.1);border-color:rgba(40,200,64,.4)}
 
@@ -104,64 +104,10 @@
       <a class="btn btn-primary" href="https://github.com/rescenedev/alldoc">GitHub에서 보기</a>
       <a class="btn btn-ghost" href="#install">설치하기</a>
     </div>
-    <div class="install"><code class="cmd" data-copy="brew install rescenedev/tap/alldoc">brew install rescenedev/tap/alldoc<span class="copy">복사</span></code></div>
+    <div class="install"><code class="cmd" data-copy="brew install rescenedev/tap/alldoc">brew install rescenedev/tap/alldoc<span class="copy" aria-label="복사">📋</span></code></div>
   </div>
 
-  <div class="wrap shot">
-    <div class="win">
-      <div class="titlebar">
-        <div class="lights"><i class="r"></i><i class="y"></i><i class="g"></i></div>
-        <div class="search">
-          <div class="box">🔍 ‘전체 폴더’ 검색 ⌘K</div>
-        </div>
-        <div class="seg"><span class="on">이름</span><span>본문</span></div>
-      </div>
-      <div class="body">
-        <div class="side">
-          <div class="h">　</div>
-          <div class="row sel">▦ 전체 폴더</div>
-          <div class="row">★ 즐겨찾기 <span style="margin-left:auto;color:var(--dim)">3</span></div>
-          <div class="h">지정 폴더</div>
-          <div class="row">📁 Documents</div>
-          <div class="row">📁 Downloads</div>
-          <div class="row">📁 work</div>
-        </div>
-        <div class="list">
-          <div class="item sel">
-            <div class="ic"></div>
-            <div class="meta"><div class="nm">전략_2026.docx <span class="star">★</span></div>
-              <div class="snip">…클라우드 전환 <b>전략</b>과 예산 계획…</div></div>
-            <span class="tag">Word</span>
-          </div>
-          <div class="item">
-            <div class="ic"></div>
-            <div class="meta"><div class="nm">예산.xlsx</div>
-              <div class="snip">클라우드 <b>예산</b> 시트 3분기 합계</div></div>
-            <span class="tag">Excel</span>
-          </div>
-          <div class="item">
-            <div class="ic"></div>
-            <div class="meta"><div class="nm">발표자료.pptx</div>
-              <div class="snip">발표자료 클라우드 전환 로드맵</div></div>
-            <span class="tag">PPT</span>
-          </div>
-          <div class="item">
-            <div class="ic"></div>
-            <div class="meta"><div class="nm">계획서.hwpx</div>
-              <div class="snip">한글 문서 클라우드 전환 계획서</div></div>
-            <span class="tag">한글</span>
-          </div>
-          <div class="item">
-            <div class="ic"></div>
-            <div class="meta"><div class="nm">안내문.pdf</div>
-              <div class="snip">이 안에는 클라우드 전환 키워드…</div></div>
-            <span class="tag">PDF</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</header>
+  </header>
 
 <section>
   <div class="wrap">
@@ -200,12 +146,12 @@
       <div class="card">
         <h3>Homebrew</h3>
         <p style="margin-bottom:12px">가장 간단한 방법입니다.</p>
-        <code class="cmd" data-copy="brew install rescenedev/tap/alldoc">brew install rescenedev/tap/alldoc<span class="copy">복사</span></code>
+        <code class="cmd" data-copy="brew install rescenedev/tap/alldoc">brew install rescenedev/tap/alldoc<span class="copy" aria-label="복사">📋</span></code>
       </div>
       <div class="card">
         <h3>소스 빌드</h3>
         <p style="margin-bottom:12px">macOS 14+, Swift 6 (Command Line Tools면 충분)</p>
-        <code class="cmd" data-copy="git clone https://github.com/rescenedev/alldoc.git&#10;cd alldoc &amp;&amp; ./build.sh release &amp;&amp; open build/AllDoc.app">git clone https://github.com/rescenedev/alldoc.git<br>cd alldoc &amp;&amp; ./build.sh release &amp;&amp; open build/AllDoc.app<span class="copy">복사</span></code>
+        <code class="cmd" data-copy="git clone https://github.com/rescenedev/alldoc.git&#10;cd alldoc &amp;&amp; ./build.sh release &amp;&amp; open build/AllDoc.app">git clone https://github.com/rescenedev/alldoc.git<br>cd alldoc &amp;&amp; ./build.sh release &amp;&amp; open build/AllDoc.app<span class="copy" aria-label="복사">📋</span></code>
       </div>
     </div>
     <div class="stack">
@@ -226,8 +172,8 @@ document.querySelectorAll('code.cmd').forEach(function(el){
     var text = el.getAttribute('data-copy') || el.innerText.replace(/복사$/,'').trim();
     navigator.clipboard && navigator.clipboard.writeText(text);
     el.classList.add('copied');
-    var c = el.querySelector('.copy'); if(c) c.textContent='복사됨!';
-    setTimeout(function(){ el.classList.remove('copied'); if(c) c.textContent='복사'; }, 1500);
+    var c = el.querySelector('.copy'); if(c) c.textContent='✅';
+    setTimeout(function(){ el.classList.remove('copied'); if(c) c.textContent='📋'; }, 1500);
   });
 });
 </script>

@@ -2,6 +2,8 @@ import SwiftUI
 
 struct InspectorView: View {
     @EnvironmentObject var store: DocStore
+    @State private var matchLines: [String] = []
+    @State private var selectedMatch: Int?
 
     var body: some View {
         Group {
@@ -39,8 +41,7 @@ struct InspectorView: View {
                         .id(file.url)
                 }
             }
-            .frame(height: 260)
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, minHeight: 220, maxHeight: .infinity)
             .background(Color(nsColor: .windowBackgroundColor))
 
             Divider()
@@ -49,12 +50,23 @@ struct InspectorView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     header(file)
                     metadata(file)
-                    if !file.snippets.isEmpty {
-                        snippetsSection(file)
+                    if !matchLines.isEmpty {
+                        snippetsSection(matchLines)
                     }
                     actions(file)
                 }
                 .padding(16)
+            }
+            .frame(height: 320)   // 하단 정보·본문일치 영역 항상 보이게(미리보기는 위에서 가변)
+        }
+        .task(id: "\(file.url.path)|\(store.searchText)") {
+            selectedMatch = nil
+            let q = store.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if q.isEmpty {
+                matchLines = file.snippets.map { $0.text }
+            } else {
+                let lines = DocIndex.shared.matchLines(path: file.url.path, query: q, limit: 25)
+                matchLines = lines.isEmpty ? file.snippets.map { $0.text } : lines
             }
         }
     }
@@ -112,21 +124,29 @@ struct InspectorView: View {
         }
     }
 
-    private func snippetsSection(_ file: DocFile) -> some View {
+    private func snippetsSection(_ lines: [String]) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Label("본문 일치", systemImage: "text.quote")
+            Label("본문 일치 \(lines.count)곳", systemImage: "text.quote")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.secondary)
-            ForEach(file.snippets) { snippet in
+            ForEach(Array(lines.enumerated()), id: \.offset) { idx, line in
                 HStack(alignment: .top, spacing: 6) {
                     Image(systemName: "text.quote")
                         .font(.system(size: 9))
                         .foregroundStyle(.tertiary)
                         .frame(width: 16, alignment: .trailing)
-                    Highlighter.text(snippet.text)
+                    Highlighter.text(line)
                         .font(.system(size: 11))
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .padding(.vertical, 3)
+                .padding(.horizontal, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(selectedMatch == idx ? Color.accentColor.opacity(0.30) : .clear)
+                )
+                .contentShape(Rectangle())
+                .onTapGesture { selectedMatch = (selectedMatch == idx ? nil : idx) }
             }
         }
         .padding(12)
