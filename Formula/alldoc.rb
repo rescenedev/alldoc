@@ -2,7 +2,7 @@ class Alldoc < Formula
   desc "Native macOS document search & manager (name + full-text)"
   homepage "https://github.com/rescenedev/alldoc"
   url "https://github.com/rescenedev/alldoc/releases/download/v0.1.1/AllDoc-v0.1.1.zip"
-  sha256 "ce23e7c36a57d01aa259726ceb3cafc3d5cc7f4f6419ee0d7918938ab22699b1"
+  sha256 "2fadd4515fae95c02032c0dbe28a2c815c299cc3290e161f6ba655f050d34c0f"
   version "0.1.1"
   license "MIT"
   head "https://github.com/rescenedev/alldoc.git", branch: "main"
