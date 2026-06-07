@@ -2,16 +2,18 @@ import SwiftUI
 import AppKit
 
 /// 배경(머티리얼)에 영향받지 않는 고정색 구분선 — 위/아래/좌우 색을 통일.
-private struct HSep: View { var body: some View { Color(nsColor: .separatorColor).frame(height: 1) } }
-private struct VSep: View { var body: some View { Color(nsColor: .separatorColor).frame(width: 1) } }
+private struct HSep: View { var body: some View { Color.appLine.frame(height: 1) } }
+private struct VSep: View { var body: some View { Color.appLine.frame(width: 1) } }
 
 struct ContentView: View {
     @EnvironmentObject var store: DocStore
     @State private var showInspector = false   // 기본은 목록 중심, 미리보기는 Space(Quick Look)
     @State private var showSidebar = true
     @FocusState private var searchFocused: Bool
-    @AppStorage("inspectorWidth") private var inspectorWidth: Double = 460
+    @AppStorage("inspectorWidth") private var storedInspectorWidth: Double = 460
+    @State private var liveInspectorWidth: Double?
     @State private var dragStartWidth: Double?
+    private var inspectorWidth: Double { liveInspectorWidth ?? storedInspectorWidth }
 
     var body: some View {
         // NavigationStack 으로 네이티브 통합 툴바를 한 줄로 쓴다(신호등 세로 중앙 정렬).
@@ -34,13 +36,13 @@ struct ContentView: View {
                     inspectorResizeHandle
                     InspectorView()
                         .frame(width: inspectorWidth)
-                        // Quick Look(NSView)이 통합 툴바 위로 그려지는 것 방지: 툴바 높이만큼 아래에서 시작.
-                        .padding(.top, 52)
                         .transition(.move(edge: .trailing))
                 }
             }
             .navigationTitle("")
             .toolbar { toolbarContent }
+            // 슬레이트 단일 톤. 불투명이라 아래로 들어온 콘텐츠도 비치지 않음.
+            .toolbarBackground(Color.appBG, for: .windowToolbar)
             .toolbarBackground(.visible, for: .windowToolbar)
         }
         .onChange(of: store.focusSearchPulse) { searchFocused = true }
@@ -50,7 +52,7 @@ struct ContentView: View {
     // 인스펙터 폭 조절 드래그 핸들 (1px 선 + 10px 히트영역).
     private var inspectorResizeHandle: some View {
         Rectangle()
-            .fill(Color(nsColor: .separatorColor))
+            .fill(Color.appLine)
             .frame(width: 1)
             .overlay(
                 Color.clear
@@ -60,15 +62,19 @@ struct ContentView: View {
                         if inside { NSCursor.resizeLeftRight.set() } else { NSCursor.arrow.set() }
                     }
                     .gesture(
-                        DragGesture()
+                        // 전역 좌표 기준: 핸들이 같이 움직여도 좌표가 흔들리지 않아 진동(떨림) 없음.
+                        DragGesture(coordinateSpace: .global)
                             .onChanged { v in
-                                if dragStartWidth == nil { dragStartWidth = inspectorWidth }
-                                let start = dragStartWidth ?? inspectorWidth
-                                // 최대 = 창 폭의 약 62%(화면 절반 이상까지 허용)
+                                if dragStartWidth == nil { dragStartWidth = storedInspectorWidth }
+                                let start = dragStartWidth ?? storedInspectorWidth
                                 let maxW = Double(NSApp.keyWindow?.frame.width ?? 1800) * 0.62
-                                inspectorWidth = min(maxW, max(320, start - Double(v.translation.width)))
+                                liveInspectorWidth = min(maxW, max(320, start - Double(v.translation.width)))
                             }
-                            .onEnded { _ in dragStartWidth = nil }
+                            .onEnded { _ in
+                                if let w = liveInspectorWidth { storedInspectorWidth = w }  // 끝에만 저장
+                                liveInspectorWidth = nil
+                                dragStartWidth = nil
+                            }
                     )
             )
     }
@@ -100,7 +106,7 @@ struct ContentView: View {
                     scopeChip("본문", on: store.contentEnabled) { store.toggleContent() }
                 }
                 .padding(2)
-                .background(Capsule(style: .continuous).fill(Color.primary.opacity(0.08)))
+                .background(Capsule(style: .continuous).fill(Color.appElevated))
             }
         }
         // 우측: 보기 / 필터 / 정렬 / 미리보기
@@ -147,7 +153,7 @@ struct ContentView: View {
         // 단일선: 평상시엔 채움 한 겹만, 포커스 때만 가장자리에 맞춘 강조선.
         .background(
             Capsule(style: .continuous)
-                .fill(Color(nsColor: .textBackgroundColor).opacity(searchFocused ? 0.7 : 0.5))
+                .fill(Color.appElevated)
         )
         .overlay(
             Capsule(style: .continuous)
@@ -196,7 +202,7 @@ struct StatusBar: View {
         }
         .padding(.horizontal, 12)
         .frame(height: 24)
-        .background(.bar)
+        .background(Color.appBG)
     }
 }
 

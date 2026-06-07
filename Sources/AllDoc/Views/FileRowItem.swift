@@ -85,6 +85,6 @@ struct FileRowItem: View {
                 .foregroundStyle(subColor)
                 .frame(width: 88, alignment: .trailing)
         }
-        .padding(.vertical, 4)
+        .frame(height: 36)   // 고정 행 높이 → 리사이즈 시 높이 재계산(떨림) 방지
     }
 }

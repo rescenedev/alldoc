@@ -157,6 +157,18 @@ final class DocIndex: @unchecked Sendable {
         }
     }
 
+    /// 문서의 추출된 본문 전체. (텍스트 미리보기용)
+    func body(path: String) -> String? {
+        q.sync {
+            var stmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, "SELECT body FROM docs WHERE path=?;", -1, &stmt, nil) == SQLITE_OK else { return nil }
+            defer { sqlite3_finalize(stmt) }
+            sqlite3_bind_text(stmt, 1, path, -1, transient)
+            guard sqlite3_step(stmt) == SQLITE_ROW, let c = sqlite3_column_text(stmt, 0) else { return nil }
+            return String(cString: c)
+        }
+    }
+
     /// 특정 문서 본문에서 질의가 포함된 줄들을 (마커로 감싸) 여러 개 반환. 인스펙터에서 "어디에" 표시용.
     func matchLines(path: String, query rawQuery: String, limit: Int) -> [String] {
         let query = rawQuery.trimmingCharacters(in: .whitespacesAndNewlines).precomposedStringWithCanonicalMapping

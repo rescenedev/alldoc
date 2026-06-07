@@ -11,6 +11,22 @@ enum Highlighter {
         s.filter { $0 != open && $0 != close }
     }
 
+    /// 문자열 안의 term 모든 출현을 마커로 감싼다. (대소문자 무시)
+    static func mark(_ s: String, term: String) -> (marked: String, hasMatch: Bool) {
+        guard !term.isEmpty else { return (s, false) }
+        var result = ""
+        var rest = Substring(s)
+        var found = false
+        while let r = rest.range(of: term, options: .caseInsensitive) {
+            result += rest[rest.startIndex..<r.lowerBound]
+            result += String(open) + rest[r] + String(close)
+            rest = rest[r.upperBound...]
+            found = true
+        }
+        result += rest
+        return found ? (result, true) : (s, false)
+    }
+
     /// 마커 구간을 .bold 로 강조한 Text. (색은 부모 foregroundStyle 상속)
     static func text(_ s: String) -> Text {
         var result = Text("")

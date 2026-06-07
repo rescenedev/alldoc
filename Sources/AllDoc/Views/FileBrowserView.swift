@@ -15,7 +15,7 @@ struct FileBrowserView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(nsColor: .textBackgroundColor))
+        .background(Color.appBG)
     }
 
     // MARK: - 목록 (기본)

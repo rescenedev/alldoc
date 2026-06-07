@@ -14,7 +14,7 @@ struct InspectorView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(Color.appBG)
     }
 
     private var placeholder: some View {
@@ -30,34 +30,47 @@ struct InspectorView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    private static let textExts: Set<String> = ["txt", "text", "log", "md", "markdown", "mdown", "csv", "tsv", "rtf"]
+
     private func detail(for file: DocFile) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            // 미리보기
+            // 미리보기 — 텍스트 문서는 SwiftUI 본문 뷰(하이라이트·스크롤), 그 외는 썸네일.
             Group {
                 if file.isDirectory {
                     folderPreview(file)
+                } else if Self.textExts.contains(file.ext) {
+                    TextMatchPreview(path: file.url.path, query: store.searchText, selectedMatch: $selectedMatch)
                 } else {
-                    QuickLookPreview(url: file.url)
-                        .id(file.url)
+                    // List 로 감싸 통합 툴바 침범 방지(자동 안전영역 인셋).
+                    List {
+                        DocThumbnail(url: file.url, size: 220)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
+                    }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .background(Color.appBG)
                 }
             }
-            .frame(maxWidth: .infinity, minHeight: 220, maxHeight: .infinity)
-            .background(Color(nsColor: .windowBackgroundColor))
+            .frame(maxWidth: .infinity, minHeight: 200, maxHeight: .infinity)
 
             Divider()
 
+            // 하단: 본문 일치(위) → 파일 정보(아래) → 열기
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     header(file)
-                    metadata(file)
                     if !matchLines.isEmpty {
                         snippetsSection(matchLines)
                     }
+                    metadata(file)
                     actions(file)
                 }
                 .padding(16)
             }
-            .frame(height: 320)   // 하단 정보·본문일치 영역 항상 보이게(미리보기는 위에서 가변)
+            .frame(height: 300)
         }
         .task(id: "\(file.url.path)|\(store.searchText)") {
             selectedMatch = nil
@@ -108,7 +121,7 @@ struct InspectorView: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+        .background(Color.appElevated, in: RoundedRectangle(cornerRadius: 8))
     }
 
     private func metaRow(_ label: String, _ value: String) -> some View {
@@ -151,7 +164,7 @@ struct InspectorView: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.yellow.opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
+        .background(Color.appElevated, in: RoundedRectangle(cornerRadius: 8))
     }
 
     private func actions(_ file: DocFile) -> some View {
