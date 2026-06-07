@@ -1,0 +1,13 @@
+# SwiftPM / build artifacts
+.build/
+build/
+*.o
+*.swiftmodule
+
+# macOS
+.DS_Store
+
+# Xcode (if ever opened)
+*.xcuserstate
+xcuserdata/
+DerivedData/
