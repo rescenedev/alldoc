@@ -1,12 +1,10 @@
 class Alldoc < Formula
   desc "Native macOS document search & manager (name + full-text)"
   homepage "https://github.com/rescenedev/alldoc"
+  url "https://github.com/rescenedev/alldoc/archive/refs/tags/v0.1.0.tar.gz"
+  sha256 "4afecf57369b6cc102bc5fa3e96f4ec0c7a2d26299951b421d31698de623369f"
   license "MIT"
   head "https://github.com/rescenedev/alldoc.git", branch: "main"
-
-  # 안정 릴리스 태그 생성 후 url/sha256 채움:
-  # url "https://github.com/rescenedev/alldoc/archive/refs/tags/v0.1.0.tar.gz"
-  # sha256 "REPLACE_WITH_RELEASE_TARBALL_SHA256"
 
   depends_on "fd"
   depends_on "fzf"
