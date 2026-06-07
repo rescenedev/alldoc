@@ -30,7 +30,14 @@ struct InspectorView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private static let textExts: Set<String> = ["txt", "text", "log", "md", "markdown", "mdown", "csv", "tsv", "rtf"]
+    private static let textExts: Set<String> = ["txt", "text", "log", "md", "markdown", "mdown", "csv", "tsv"]
+    // 서식을 그대로 파싱·렌더링하는 형식(NSAttributedString) — 흰 페이지 + 하이라이트.
+    private static let richExts: Set<String> = ["docx", "doc", "rtf", "rtfd", "odt", "html", "htm"]
+    // 서식 파서가 없는 형식 — 추출 본문을 텍스트 미리보기로(하이라이트 가능).
+    private static let officeTextExts: Set<String> = ["pptx", "ppt", "xlsx", "xls", "hwpx", "hwp"]
+    private func usesTextPreview(_ ext: String) -> Bool {
+        Self.textExts.contains(ext) || Self.officeTextExts.contains(ext)
+    }
 
     private func detail(for file: DocFile) -> some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -38,39 +45,34 @@ struct InspectorView: View {
             Group {
                 if file.isDirectory {
                     folderPreview(file)
-                } else if Self.textExts.contains(file.ext) {
+                } else if file.ext == "pdf" {
+                    PDFPreview(url: file.url, query: store.searchText)
+                } else if Self.richExts.contains(file.ext) {
+                    // docx 등: 서식 유지 + 폭 맞춤 + 검색어 하이라이트.
+                    RichDocPreview(url: file.url, query: store.searchText)
+                } else if usesTextPreview(file.ext) {
+                    // 텍스트·오피스 문서: 추출 본문을 폭 가득 렌더링 + 검색어 하이라이트 + 일치 줄 스크롤.
                     TextMatchPreview(path: file.url.path, query: store.searchText, selectedMatch: $selectedMatch)
                 } else {
-                    // List 로 감싸 통합 툴바 침범 방지(자동 안전영역 인셋).
-                    List {
-                        DocThumbnail(url: file.url, size: 220)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .listRowSeparator(.hidden)
-                            .listRowBackground(Color.clear)
-                    }
-                    .listStyle(.plain)
-                    .scrollContentBackground(.hidden)
-                    .background(Color.appBG)
+                    // 이미지 등 본문이 없는 형식은 네이티브 Quick Look 으로 가득 채워 표시.
+                    QuickLookView(url: file.url)
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 200, maxHeight: .infinity)
 
             Divider()
 
-            // 하단: 본문 일치(위) → 파일 정보(아래) → 열기
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    header(file)
-                    if !matchLines.isEmpty {
-                        snippetsSection(matchLines)
-                    }
-                    metadata(file)
-                    actions(file)
+            // 하단: 본문 일치(위) → 파일 정보(아래) → 열기.
+            // 내용만큼만 차지(고정 높이 X) → 빈 공간 없이 미리보기가 위쪽을 채움.
+            VStack(alignment: .leading, spacing: 14) {
+                header(file)
+                if !matchLines.isEmpty {
+                    snippetsSection(matchLines)
                 }
-                .padding(16)
+                metadata(file)
+                actions(file)
             }
-            .frame(height: 300)
+            .padding(16)
         }
         .task(id: "\(file.url.path)|\(store.searchText)") {
             selectedMatch = nil
@@ -142,6 +144,20 @@ struct InspectorView: View {
             Label("본문 일치 \(lines.count)곳", systemImage: "text.quote")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.secondary)
+            // 줄이 많으면 내부 스크롤(고정 높이)로 묶어 하단 정보 영역 높이를 안정화.
+            if lines.count > 6 {
+                ScrollView { snippetRows(lines) }.frame(height: 200)
+            } else {
+                snippetRows(lines)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.appElevated, in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func snippetRows(_ lines: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(lines.enumerated()), id: \.offset) { idx, line in
                 HStack(alignment: .top, spacing: 6) {
                     Image(systemName: "text.quote")
@@ -162,9 +178,6 @@ struct InspectorView: View {
                 .onTapGesture { selectedMatch = (selectedMatch == idx ? nil : idx) }
             }
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.appElevated, in: RoundedRectangle(cornerRadius: 8))
     }
 
     private func actions(_ file: DocFile) -> some View {

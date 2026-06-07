@@ -27,21 +27,28 @@ struct FileBrowserView: View {
             List {
                 ForEach(store.items) { file in
                     let selected = store.selection == file.id
+                    // 선택 배경을 '행 콘텐츠' 레이어에 두면 라운드가 확실히 적용된다.
+                    // (.listRowBackground 는 macOS 26 에서 행 전체를 꽉 채워 각지게 보임)
                     FileRowItem(file: file, isSelected: selected)
-                        .id(file.id)
-                        .listRowBackground(
-                            RoundedRectangle(cornerRadius: 5)
+                        .padding(.horizontal, 10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
                                 .fill(selected ? Color.accentColor : Color.clear)
-                                .padding(.vertical, 1)
-                                .padding(.horizontal, 6)
                         )
+                        .id(file.id)
+                        .listRowInsets(EdgeInsets(top: 1, leading: 8, bottom: 1, trailing: 8))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
                         .contentShape(Rectangle())
                         .onTapGesture { store.select(file.id) }
                         .simultaneousGesture(TapGesture(count: 2).onEnded { store.open(file) })
                         .contextMenu { FileContextMenu(file: file) }
                 }
             }
-            .listStyle(.inset)
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(Color.appBG)
             .onChange(of: store.selection) { _, sel in
                 if let sel { withAnimation(.easeOut(duration: 0.12)) { proxy.scrollTo(sel, anchor: .center) } }
             }

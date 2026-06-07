@@ -45,7 +45,11 @@ struct ContentView: View {
             .toolbarBackground(Color.appBG, for: .windowToolbar)
             .toolbarBackground(.visible, for: .windowToolbar)
         }
-        .onChange(of: store.focusSearchPulse) { searchFocused = true }
+        .onChange(of: store.focusSearchPulse) {
+            searchFocused = true
+            // ⌘K 로 검색 시작하면 본문 미리보기를 바로 볼 수 있게 패널도 연다.
+            if !showInspector { withAnimation(.easeInOut(duration: 0.18)) { showInspector = true } }
+        }
         .frame(minWidth: 900, minHeight: 580)
     }
 

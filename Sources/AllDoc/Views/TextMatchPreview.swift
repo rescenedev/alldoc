@@ -18,7 +18,7 @@ struct TextMatchPreview: View {
             List {
                 ForEach(lines.indices, id: \.self) { i in
                     Highlighter.text(lines[i])
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(.system(size: 22, design: .monospaced))
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .listRowSeparator(.hidden)

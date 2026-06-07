@@ -25,38 +25,38 @@ struct FileRowItem: View {
     }
 
     var body: some View {
-        HStack(spacing: 10) {
-            FileIcon(url: file.url, size: 30)
+        HStack(spacing: 13) {
+            FileIcon(url: file.url, size: 42)
 
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 5) {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
                     Text(file.name)
-                        .font(.system(size: 13))
+                        .font(.system(size: 18))
                         .foregroundStyle(nameColor)
                         .lineLimit(1)
                     if store.isFavorite(file) {
                         Image(systemName: "star.fill")
-                            .font(.system(size: 8))
+                            .font(.system(size: 11))
                             .foregroundStyle(isSelected ? Color.white : Color.yellow)
                     }
                 }
                 if let snippet = file.snippets.first {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 5) {
                         Image(systemName: "text.quote")
-                            .font(.system(size: 8))
+                            .font(.system(size: 11))
                             .foregroundStyle(subColorDim)
                         Highlighter.text(snippet.text)
-                            .font(.system(size: 10))
+                            .font(.system(size: 14))
                             .foregroundStyle(subColor)
                             .lineLimit(1)
                     }
                 } else {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 5) {
                         Image(systemName: "folder")
-                            .font(.system(size: 8))
+                            .font(.system(size: 11))
                             .foregroundStyle(subColorDim)
                         Text(relativeLocation)
-                            .font(.system(size: 10))
+                            .font(.system(size: 14))
                             .foregroundStyle(subColorDim)
                             .lineLimit(1)
                             .truncationMode(.head)
@@ -64,27 +64,27 @@ struct FileRowItem: View {
                 }
             }
 
-            Spacer(minLength: 8)
+            Spacer(minLength: 10)
 
             if let type = file.docType {
                 Text(type.displayName)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(isSelected ? Color.white : type.tint)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 3)
                     .background((isSelected ? Color.white.opacity(0.22) : type.tint.opacity(0.12)), in: Capsule())
             }
 
             Text(Formatters.size(file.size))
-                .font(.system(size: 11))
+                .font(.system(size: 14))
                 .foregroundStyle(subColor)
-                .frame(width: 72, alignment: .trailing)
+                .frame(width: 92, alignment: .trailing)
 
             Text(Formatters.dateRelative(file.modified))
-                .font(.system(size: 11))
+                .font(.system(size: 14))
                 .foregroundStyle(subColor)
-                .frame(width: 88, alignment: .trailing)
+                .frame(width: 112, alignment: .trailing)
         }
-        .frame(height: 36)   // 고정 행 높이 → 리사이즈 시 높이 재계산(떨림) 방지
+        .frame(height: 52)   // 고정 행 높이 → 리사이즈 시 높이 재계산(떨림) 방지
     }
 }
