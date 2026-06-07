@@ -1,8 +1,9 @@
 class Alldoc < Formula
   desc "Native macOS document search & manager (name + full-text)"
   homepage "https://github.com/rescenedev/alldoc"
-  url "https://github.com/rescenedev/alldoc/archive/refs/tags/v0.1.1.tar.gz"
-  sha256 "093509c0a46a91346dc7fbdf645dbe3bb0ba5a7dbfcf7e04da6c78d447fdaa2c"
+  url "https://github.com/rescenedev/alldoc/releases/download/v0.1.1/AllDoc-v0.1.1.zip"
+  sha256 "ce23e7c36a57d01aa259726ceb3cafc3d5cc7f4f6419ee0d7918938ab22699b1"
+  version "0.1.1"
   license "MIT"
   head "https://github.com/rescenedev/alldoc.git", branch: "main"
 
@@ -12,8 +13,7 @@ class Alldoc < Formula
   depends_on macos: :sonoma # macOS 14+
 
   def install
-    system "./build.sh", "release"
-    prefix.install "build/AllDoc.app"
+    prefix.install "AllDoc.app"
   end
 
   def caveats
