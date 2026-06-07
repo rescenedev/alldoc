@@ -6,6 +6,6 @@ extension Color {
     static let appBG = Color(red: 0.118, green: 0.145, blue: 0.188)      // ~#1e2530
     /// 살짝 밝은 슬레이트. 검색창·섹션 카드·선택 폴더 등 약한 강조.
     static let appElevated = Color(red: 0.165, green: 0.196, blue: 0.243) // ~#2a323e
-    /// 구분선.
-    static let appLine = Color(red: 0.235, green: 0.267, blue: 0.318)    // ~#3c4451
+    /// 구분선. 배경과 거의 붙는 아주 옅은 톤(딱딱한 경계 방지).
+    static let appLine = Color(red: 0.180, green: 0.212, blue: 0.259)    // ~#2e3642
 }
