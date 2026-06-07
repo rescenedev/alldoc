@@ -39,6 +39,9 @@ final class DocIndex: @unchecked Sendable {
             exec("CREATE TRIGGER IF NOT EXISTS docs_ai AFTER INSERT ON docs BEGIN INSERT INTO docs_fts(rowid, body) VALUES (new.id, new.body); END;")
             exec("CREATE TRIGGER IF NOT EXISTS docs_ad AFTER DELETE ON docs BEGIN INSERT INTO docs_fts(docs_fts, rowid, body) VALUES('delete', old.id, old.body); END;")
             exec("CREATE TRIGGER IF NOT EXISTS docs_au AFTER UPDATE ON docs BEGIN INSERT INTO docs_fts(docs_fts, rowid, body) VALUES('delete', old.id, old.body); INSERT INTO docs_fts(rowid, body) VALUES (new.id, new.body); END;")
+            // 브라우즈용 전체 파일 메타데이터(이름순/날짜순 즉시 조회).
+            exec("CREATE TABLE IF NOT EXISTS files(path TEXT PRIMARY KEY, name TEXT, ext TEXT, size INTEGER, mtime REAL);")
+            exec("CREATE INDEX IF NOT EXISTS files_mtime ON files(mtime);")
         }
     }
 
@@ -150,6 +153,99 @@ final class DocIndex: @unchecked Sendable {
                 }
             }
             return hits
+        }
+    }
+
+    // MARK: - 브라우즈 파일 메타데이터
+
+    private func likeClause(_ prefixes: [String]) -> String {
+        "(" + prefixes.map { _ in "path LIKE ?" }.joined(separator: " OR ") + ")"
+    }
+    private func inClause(_ exts: [String]) -> String {
+        "ext IN (" + exts.map { _ in "?" }.joined(separator: ",") + ")"
+    }
+
+    /// 주어진 루트들 하위의 이미 색인된 경로 집합 (차집합 계산용).
+    func knownPaths(rootPrefixes: [String]) -> Set<String> {
+        q.sync {
+            guard !rootPrefixes.isEmpty else { return [] }
+            var out = Set<String>()
+            var stmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, "SELECT path FROM files WHERE \(likeClause(rootPrefixes));", -1, &stmt, nil) == SQLITE_OK else { return out }
+            defer { sqlite3_finalize(stmt) }
+            var i: Int32 = 1
+            for p in rootPrefixes { sqlite3_bind_text(stmt, i, p + "/%", -1, transient); i += 1 }
+            while sqlite3_step(stmt) == SQLITE_ROW { out.insert(String(cString: sqlite3_column_text(stmt, 0))) }
+            return out
+        }
+    }
+
+    func upsertFiles(_ rows: [(path: String, name: String, ext: String, size: Int64, mtime: Double)]) {
+        guard !rows.isEmpty else { return }
+        q.sync {
+            exec("BEGIN;")
+            var stmt: OpaquePointer?
+            sqlite3_prepare_v2(db, "INSERT INTO files(path,name,ext,size,mtime) VALUES(?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET name=excluded.name, ext=excluded.ext, size=excluded.size, mtime=excluded.mtime;", -1, &stmt, nil)
+            for r in rows {
+                sqlite3_reset(stmt)
+                sqlite3_bind_text(stmt, 1, r.path, -1, transient)
+                sqlite3_bind_text(stmt, 2, r.name, -1, transient)
+                sqlite3_bind_text(stmt, 3, r.ext, -1, transient)
+                sqlite3_bind_int64(stmt, 4, r.size)
+                sqlite3_bind_double(stmt, 5, r.mtime)
+                sqlite3_step(stmt)
+            }
+            sqlite3_finalize(stmt)
+            exec("COMMIT;")
+        }
+    }
+
+    func deleteFiles(_ paths: [String]) {
+        guard !paths.isEmpty else { return }
+        q.sync {
+            exec("BEGIN;")
+            var stmt: OpaquePointer?
+            sqlite3_prepare_v2(db, "DELETE FROM files WHERE path=?;", -1, &stmt, nil)
+            for p in paths { sqlite3_reset(stmt); sqlite3_bind_text(stmt, 1, p, -1, transient); sqlite3_step(stmt) }
+            sqlite3_finalize(stmt)
+            exec("COMMIT;")
+        }
+    }
+
+    /// 루트+종류로 정렬된 상위 N개 (orderColumn 은 호출측에서 안전한 컬럼명만 전달).
+    func browse(rootPrefixes: [String], exts: [String], orderColumn: String, ascending: Bool, limit: Int) -> [FileRow] {
+        q.sync {
+            guard !rootPrefixes.isEmpty, !exts.isEmpty else { return [] }
+            let order = ascending ? "ASC" : "DESC"
+            let sql = "SELECT path,size,mtime FROM files WHERE \(likeClause(rootPrefixes)) AND \(inClause(exts)) ORDER BY \(orderColumn) \(order) LIMIT ?;"
+            var stmt: OpaquePointer?
+            var out: [FileRow] = []
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return out }
+            defer { sqlite3_finalize(stmt) }
+            var i: Int32 = 1
+            for p in rootPrefixes { sqlite3_bind_text(stmt, i, p + "/%", -1, transient); i += 1 }
+            for e in exts { sqlite3_bind_text(stmt, i, e, -1, transient); i += 1 }
+            sqlite3_bind_int(stmt, i, Int32(limit))
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                out.append(FileRow(path: String(cString: sqlite3_column_text(stmt, 0)),
+                                   size: sqlite3_column_int64(stmt, 1),
+                                   mtime: sqlite3_column_double(stmt, 2)))
+            }
+            return out
+        }
+    }
+
+    func browseCount(rootPrefixes: [String], exts: [String]) -> Int {
+        q.sync {
+            guard !rootPrefixes.isEmpty, !exts.isEmpty else { return 0 }
+            let sql = "SELECT COUNT(*) FROM files WHERE \(likeClause(rootPrefixes)) AND \(inClause(exts));"
+            var stmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return 0 }
+            defer { sqlite3_finalize(stmt) }
+            var i: Int32 = 1
+            for p in rootPrefixes { sqlite3_bind_text(stmt, i, p + "/%", -1, transient); i += 1 }
+            for e in exts { sqlite3_bind_text(stmt, i, e, -1, transient); i += 1 }
+            return sqlite3_step(stmt) == SQLITE_ROW ? Int(sqlite3_column_int64(stmt, 0)) : 0
         }
     }
 

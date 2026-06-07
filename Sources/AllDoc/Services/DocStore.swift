@@ -232,40 +232,34 @@ final class DocStore: ObservableObject {
             return
         }
         let types = enabledTypes
-
-        // 1) 캐시가 있으면 즉시 표시(큰 폴더도 팍 열림). 캐시는 정렬·상위 N개만 저장돼 가볍다.
-        let cached = BrowseCache.load(roots: roots, types: types)
-        if let cached {
-            items = cached.files
-            isSearching = false
-            statusText = browseSummary(total: cached.total, shown: cached.files.count) + " · 갱신 중…"
-        } else {
-            items = []
-            isSearching = true
-            statusText = "문서 불러오는 중…"
-        }
-
-        // 2) 백그라운드 최신화. stat·정렬·캐시 저장을 모두 detached(off-main)에서 끝내고
-        //    표시는 상위 N개만 → 메인 스레드/리스트 부하 제거(대형 폴더 프리징 방지).
         let sortK = sortKey, sortAsc = sortAscending
+        let cap = SearchService.browseDisplayCap
+
+        // 1) SQLite 메타 테이블에서 즉시 조회(첫 로그인에도 빠름, fd/stat 없음).
+        let first = SearchService.browseFromIndex(roots: roots, types: types,
+                                                  sortKey: sortK, ascending: sortAsc, limit: cap)
+        items = first.items
+        isSearching = first.items.isEmpty   // 비었으면 최초 색인 진행 중일 수 있음
+        statusText = first.items.isEmpty
+            ? "문서 색인 중…"
+            : browseSummary(total: first.total, shown: first.items.count) + " · 갱신 중…"
+
+        // 2) 백그라운드: 메타 최신화(신규만 stat) 후 재조회.
         loadTask = Task { [weak self] in
-            let payload = try? await Task.detached(priority: .userInitiated) { () -> (items: [DocFile], total: Int) in
-                let files = try await SearchService.listDocuments(roots: roots, types: types)
-                let sortedFiles = DocStore.sortFiles(files, key: sortK, ascending: sortAsc)
-                let display = Array(sortedFiles.prefix(SearchService.browseDisplayCap))
-                BrowseCache.save(roots: roots, types: types, files: display, total: sortedFiles.count)
-                return (display, sortedFiles.count)
+            await Task.detached(priority: .userInitiated) {
+                await SearchService.refreshFiles(roots: roots)
             }.value
             guard let self, !Task.isCancelled else { return }
-            let result = payload ?? (items: [], total: 0)
-            self.items = result.items
+            let upd = SearchService.browseFromIndex(roots: roots, types: types,
+                                                    sortKey: sortK, ascending: sortAsc, limit: cap)
+            self.items = upd.items
             self.isSearching = false
-            self.statusText = self.browseSummary(total: result.total, shown: result.items.count)
-            if self.selection != nil, !result.items.contains(where: { $0.id == self.selection }) {
+            self.statusText = self.browseSummary(total: upd.total, shown: upd.items.count)
+            if self.selection != nil, !upd.items.contains(where: { $0.id == self.selection }) {
                 self.selection = nil
             }
         }
-        // 백그라운드에서 본문 캐시를 미리 데워 본문 검색을 빠르게.
+        // 본문 FTS 색인도 백그라운드로.
         startPrewarm(roots: roots, types: types)
     }
 

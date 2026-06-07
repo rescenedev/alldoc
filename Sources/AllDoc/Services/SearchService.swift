@@ -7,25 +7,60 @@ enum SearchService {
     static let browseCap = 50000        // 최근순 선정을 위해 stat 하는 최대 개수
     static let browseDisplayCap = 2000  // 화면에 실제로 올리는 최대 개수(전체는 검색으로)
 
-    // MARK: - 폴더 아래 모든 문서를 평탄하게 나열 (fd 재귀)
-    // 호출 측에서 detached 로 실행해 stat 부하를 메인 스레드 밖에서 처리한다.
+    // MARK: - 브라우즈 (SQLite files 테이블)
 
-    static func listDocuments(roots: [URL], types: Set<DocType>) async throws -> [DocFile] {
-        guard let fd = ToolLocator.shared.fd, !roots.isEmpty else { return [] }
+    /// DB에서 즉시 조회(정렬·상위 N). 첫 로그인에도 빠르다.
+    static func browseFromIndex(roots: [URL], types: Set<DocType>,
+                                sortKey: SortKey, ascending: Bool, limit: Int) -> (items: [DocFile], total: Int) {
+        let prefixes = roots.map { $0.path }
         let exts = extensions(for: types)
-        guard !exts.isEmpty else { return [] }
+        guard !prefixes.isEmpty, !exts.isEmpty else { return ([], 0) }
+        let col: String
+        switch sortKey {
+        case .name: col = "name"
+        case .modified: col = "mtime"
+        case .size: col = "size"
+        case .kind: col = "ext"
+        }
+        let rows = DocIndex.shared.browse(rootPrefixes: prefixes, exts: exts,
+                                          orderColumn: col, ascending: ascending, limit: limit)
+        let items = rows.map {
+            DocFile(url: URL(fileURLWithPath: $0.path), isDirectory: false, size: $0.size,
+                    modified: Date(timeIntervalSinceReferenceDate: $0.mtime),
+                    created: Date(timeIntervalSinceReferenceDate: $0.mtime))
+        }
+        let total = DocIndex.shared.browseCount(rootPrefixes: prefixes, exts: exts)
+        return (items, total)
+    }
 
+    /// 브라우즈 메타 테이블 최신화: fd 현재 목록 ↔ DB 차집합. 신규만 stat, 삭제분 제거.
+    static func refreshFiles(roots: [URL]) async {
+        guard let fd = ToolLocator.shared.fd, !roots.isEmpty else { return }
+        let exts = DocType.allExtensions
         var args = fdBaseArgs(exts: exts)
         args.append(".")
         args.append(contentsOf: roots.map { $0.path })
-
-        let result = try await ProcessRunner.run(fd, arguments: args)
-        try Task.checkCancellation()
-        return result.stdoutString
+        guard let result = try? await ProcessRunner.run(fd, arguments: args) else { return }
+        let current = Set(result.stdoutString
             .split(separator: "\n").map(String.init)
             .filter { !$0.isEmpty }
-            .prefix(browseCap)
-            .compactMap { DocFile.read(from: URL(fileURLWithPath: $0)) }
+            .prefix(browseCap))
+        let known = DocIndex.shared.knownPaths(rootPrefixes: roots.map { $0.path })
+
+        let deleted = known.subtracting(current)
+        if !deleted.isEmpty { DocIndex.shared.deleteFiles(Array(deleted)) }
+
+        let newPaths = current.subtracting(known)   // 신규만 stat → 첫 색인 후엔 매우 저렴
+        for chunk in Array(newPaths).chunked(into: 2000) {
+            if Task.isCancelled { return }
+            let rows = chunk.compactMap { p -> (path: String, name: String, ext: String, size: Int64, mtime: Double)? in
+                let url = URL(fileURLWithPath: p)
+                guard let f = DocFile.read(from: url) else { return nil }
+                return (p, url.lastPathComponent, url.pathExtension.lowercased(),
+                        f.size, f.modified.timeIntervalSinceReferenceDate)
+            }
+            DocIndex.shared.upsertFiles(rows)
+        }
     }
 
     // MARK: - 이름 검색 (fd 로 후보 수집 → fzf 로 퍼지 정렬)
