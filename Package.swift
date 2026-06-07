@@ -14,6 +14,14 @@ let package = Package(
             linkerSettings: [
                 .linkedLibrary("sqlite3")
             ]
+        ),
+        .testTarget(
+            name: "AllDocTests",
+            dependencies: ["AllDoc"],
+            path: "Tests/AllDocTests",
+            linkerSettings: [
+                .linkedLibrary("sqlite3")
+            ]
         )
     ]
 )

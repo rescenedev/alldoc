@@ -39,6 +39,11 @@ struct TextMatchPreview: View {
                     proxy.scrollTo(matchLineIndices[sel], anchor: .center)
                 }
             }
+            // 검색 즉시 첫 일치로 자동 스크롤(클릭 불필요).
+            .onChange(of: matchLineIndices) { _, idxs in
+                guard let first = idxs.first else { return }
+                withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo(first, anchor: .center) }
+            }
         }
         .task(id: "\(path)|\(query)") { load() }
     }

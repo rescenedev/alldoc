@@ -25,9 +25,9 @@ enum XMLTextStripper {
 
         s = decodeEntities(s)
 
-        // 공백 정리: 연속 공백 축소, 연속 빈 줄 축소.
+        // 공백 정리: 연속 공백 축소, 줄 앞뒤 공백 제거, 연속 빈 줄 축소.
         s = s.replacingOccurrences(of: "[ \\t]+", with: " ", options: .regularExpression)
-        s = s.replacingOccurrences(of: "\\n[ \\t]+", with: "\n", options: .regularExpression)
+        s = s.replacingOccurrences(of: "[ \\t]*\\n[ \\t]*", with: "\n", options: .regularExpression)
         s = s.replacingOccurrences(of: "\\n{3,}", with: "\n\n", options: .regularExpression)
 
         return s.trimmingCharacters(in: .whitespacesAndNewlines)

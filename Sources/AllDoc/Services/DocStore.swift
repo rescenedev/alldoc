@@ -27,6 +27,13 @@ final class DocStore: ObservableObject {
     @Published var searchText = "" { didSet { scheduleSearch() } }
     @Published private(set) var nameEnabled = true
     @Published private(set) var contentEnabled = true
+    private(set) var lastIncludedContent = false   // 현재 표시 중인 검색이 본문까지 포함했는지(워처 재검색용)
+
+    /// 파일명만 검색해 비었고, Enter 로 본문 검색을 더 할 수 있는 상태인가.
+    var canSearchContents: Bool {
+        isSearchMode && contentEnabled && !lastIncludedContent
+        && !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     /// ⌘K 등으로 검색창 포커스를 요청할 때 증가하는 신호. (테두리 강조용 @FocusState)
     @Published var focusSearchPulse = 0
@@ -60,7 +67,8 @@ final class DocStore: ObservableObject {
     }
     private func reSearchIfActive() {
         if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            scheduleSearch(immediate: true)
+            // 칩을 누르는 건 명시적 의도 → 본문 포함해 즉시 재검색.
+            scheduleSearch(immediate: true, includeContent: true)
         }
     }
 
@@ -324,7 +332,7 @@ final class DocStore: ObservableObject {
             }.value
             guard let self, !Task.isCancelled else { return }
             if self.isSearchMode, !query.isEmpty {
-                await self.runSearch(query: query, silent: true)   // 검색 중이면 조용히 결과 갱신
+                await self.runSearch(query: query, silent: true, includeContent: self.lastIncludedContent)   // 검색 중이면 조용히 결과 갱신
             } else {
                 let upd = SearchService.browseFromIndex(roots: roots, types: types,
                                                         sortKey: sortK, ascending: sortAsc, limit: cap)
@@ -339,7 +347,14 @@ final class DocStore: ObservableObject {
         }
     }
 
-    private func scheduleSearch(immediate: Bool = false) {
+    /// 사용자가 Enter 를 치면 본문까지 포함해 검색.
+    func submitSearch() {
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        scheduleSearch(immediate: true, includeContent: true)
+    }
+
+    private func scheduleSearch(immediate: Bool = false, includeContent: Bool = true) {
         let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             isSearching = false
@@ -347,6 +362,7 @@ final class DocStore: ObservableObject {
             return
         }
         guard isFavoritesMode || !scopes.isEmpty else { return }
+        lastIncludedContent = includeContent
         searchTask?.cancel()
         loadTask?.cancel()
         prewarmTask?.cancel()   // 검색 중에는 사전 색인을 멈춰 CPU 경쟁을 줄인다.
@@ -356,7 +372,7 @@ final class DocStore: ObservableObject {
                 try? await Task.sleep(nanoseconds: 280_000_000)
                 if Task.isCancelled { return }
             }
-            await self.runSearch(query: trimmed)
+            await self.runSearch(query: trimmed, includeContent: includeContent)
             // 검색이 끝나고 취소되지 않았으면 남은 폴더를 마저 사전 색인.
             if !Task.isCancelled, !self.isFavoritesMode {
                 self.startPrewarm(roots: self.scopes, types: self.enabledTypes)
@@ -364,7 +380,7 @@ final class DocStore: ObservableObject {
         }
     }
 
-    private func runSearch(query: String, silent: Bool = false) async {
+    private func runSearch(query: String, silent: Bool = false, includeContent: Bool) async {
         isSearchMode = true
         if !silent {                 // 워처가 유발한 백그라운드 재검색은 spinner/상태를 건드리지 않음
             isSearching = true
@@ -372,7 +388,8 @@ final class DocStore: ObservableObject {
         }
         let types = enabledTypes
         let doName = nameEnabled
-        let doContent = contentEnabled
+        // 본문 검색은 Enter(제출) 시에만. 타이핑 중에는 파일명만 즉시 검색.
+        let doContent = contentEnabled && includeContent
         defer { isSearching = false }
 
         // 즐겨찾기 모드: 즐겨찾기 파일들 안에서만 검색.
@@ -428,9 +445,14 @@ final class DocStore: ObservableObject {
             }
             if Task.isCancelled { return }
             items = sorted(acc)   // 최종 반영(쓰로틀로 누락된 마지막 배치 포함)
-            baseStatus = acc.isEmpty
-                ? "‘\(query)’ 검색 결과 없음"
-                : "검색 결과 \(acc.count)개" + (acc.count >= SearchService.maxResults ? "+" : "")
+            if acc.isEmpty {
+                // 이름만 검색해 비었고 본문 검색이 가능한 상태면 Enter 안내.
+                baseStatus = (contentEnabled && !doContent)
+                    ? "‘\(query)’ 파일명 결과 없음 · Enter 로 본문 검색"
+                    : "‘\(query)’ 검색 결과 없음"
+            } else {
+                baseStatus = "검색 결과 \(acc.count)개" + (acc.count >= SearchService.maxResults ? "+" : "")
+            }
         } catch is CancellationError {
             return
         } catch {

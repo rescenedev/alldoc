@@ -30,6 +30,21 @@ open build/AllDoc.app
 swift run AllDoc --selftest <폴더경로> <검색어>
 ```
 
+### 단위 테스트
+
+XCTest 기반 단위·통합 테스트가 `Tests/AllDocTests/` 에 있습니다(인덱스/검색/추출/정렬/하이라이트 등).
+
+```bash
+swift test
+```
+
+> XCTest 는 전체 Xcode 에 포함됩니다. `xcode-select` 가 CommandLineTools 를 가리키면
+> 다음처럼 Xcode 툴체인을 지정해 실행하세요.
+>
+> ```bash
+> DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test
+> ```
+
 ## 프로젝트 구조
 
 ```

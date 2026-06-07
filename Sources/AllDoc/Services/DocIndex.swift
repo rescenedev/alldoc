@@ -20,7 +20,13 @@ final class DocIndex: @unchecked Sendable {
         let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
             .appendingPathComponent("AllDoc", isDirectory: true)
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
-        let dbURL = base.appendingPathComponent("index.sqlite")
+        open(base.appendingPathComponent("index.sqlite"))
+    }
+
+    /// 테스트용: 격리된 DB 파일로 인스턴스 생성(사용자 인덱스 오염 방지).
+    init(dbURL: URL) { open(dbURL) }
+
+    private func open(_ dbURL: URL) {
         q.sync {
             sqlite3_open_v2(dbURL.path, &db,
                             SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nil)

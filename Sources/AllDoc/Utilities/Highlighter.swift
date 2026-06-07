@@ -27,24 +27,29 @@ enum Highlighter {
         return found ? (result, true) : (s, false)
     }
 
-    /// 마커 구간을 .bold 로 강조한 Text. (색은 부모 foregroundStyle 상속)
+    /// 마커 구간을 노란 배경 하이라이트(+굵게)로 강조한 Text.
+    /// 일치 외 구간은 부모 foregroundStyle/글꼴(크기)을 그대로 상속한다.
     static func text(_ s: String) -> Text {
-        var result = Text("")
+        var attr = AttributedString()
         var rest = Substring(s)
         while let start = rest.firstIndex(of: open) {
             if start > rest.startIndex {
-                result = result + Text(String(rest[rest.startIndex..<start]))
+                attr += AttributedString(String(rest[rest.startIndex..<start]))
             }
             let afterOpen = rest.index(after: start)
             if let end = rest[afterOpen...].firstIndex(of: close) {
-                result = result + Text(String(rest[afterOpen..<end])).fontWeight(.bold)
+                var run = AttributedString(String(rest[afterOpen..<end]))
+                run.backgroundColor = Color.yellow.opacity(0.85)
+                run.foregroundColor = .black
+                run.inlinePresentationIntent = .stronglyEmphasized   // 굵게(크기는 상속)
+                attr += run
                 rest = rest[rest.index(after: end)...]
             } else {
                 rest = rest[afterOpen...]
                 break
             }
         }
-        if !rest.isEmpty { result = result + Text(String(rest)) }
-        return result
+        if !rest.isEmpty { attr += AttributedString(String(rest)) }
+        return Text(attr)
     }
 }

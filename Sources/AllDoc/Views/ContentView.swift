@@ -142,6 +142,7 @@ struct ContentView: View {
                 .font(.system(size: 13))
                 .focused($searchFocused)
                 .frame(maxWidth: .infinity)
+                .onSubmit { store.submitSearch() }   // Enter: 본문까지 검색
 
             if store.isSearching {
                 ProgressView().controlSize(.small)
@@ -181,7 +182,8 @@ struct ContentView: View {
     }
 
     private var searchPrompt: String {
-        "‘\(store.scopeTitle)’ 검색  ⌘K"
+        // 본문 검색이 켜져 있으면 Enter 로 본문까지 검색함을 알린다.
+        store.contentEnabled ? "‘\(store.scopeTitle)’ 검색  ·  Enter로 본문" : "‘\(store.scopeTitle)’ 검색  ⌘K"
     }
 }
 

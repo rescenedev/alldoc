@@ -110,7 +110,13 @@ struct EmptyStateView: View {
             Text(emptyTitle)
                 .font(.system(size: 14))
                 .foregroundStyle(.secondary)
-            if store.managedFolders.isEmpty {
+            if showEnterHint {
+                // 파일명 결과가 없을 때 본문 검색 유도.
+                Label("Enter 를 눌러 본문에서 검색", systemImage: "return")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.accentColor)
+                    .padding(.top, 2)
+            } else if store.managedFolders.isEmpty && !store.isSearchMode {
                 Text("왼쪽 아래 ‘폴더 추가…’ 로 시작하세요")
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
@@ -119,12 +125,16 @@ struct EmptyStateView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    private var showEnterHint: Bool { store.canSearchContents && !store.isSearching }
+
     private var emptyIcon: String {
+        if showEnterHint { return "text.magnifyingglass" }
         if store.isSearchMode { return "magnifyingglass" }
         return store.managedFolders.isEmpty ? "folder.badge.plus" : "doc"
     }
     private var emptyTitle: String {
         if store.isSearching { return "검색 중…" }
+        if showEnterHint { return "‘\(store.searchText)’ 파일명 결과가 없습니다" }
         if store.isSearchMode { return "검색 결과가 없습니다" }
         if store.managedFolders.isEmpty { return "관리할 폴더를 추가하세요" }
         return "이 폴더에 문서가 없습니다"
