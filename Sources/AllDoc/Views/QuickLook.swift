@@ -44,4 +44,23 @@ final class QuickLook: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDelegat
     func previewPanel(_ panel: QLPreviewPanel!, previewItemAt index: Int) -> (any QLPreviewItem)! {
         currentURL as NSURL?
     }
+
+    // MARK: - QLPreviewPanelDelegate
+
+    /// 미리보기가 열린 상태에서 ↑/↓ → 목록의 다음/이전 파일로 이동하고 미리보기 갱신 (Finder 동일).
+    func previewPanel(_ panel: QLPreviewPanel!, handle event: NSEvent!) -> Bool {
+        guard event.type == .keyDown else { return false }
+        let delta: Int
+        switch event.keyCode {
+        case 125: delta = 1     // ↓
+        case 126: delta = -1    // ↑
+        default: return false
+        }
+        MainActor.assumeIsolated {
+            DocStore.shared.moveSelection(by: delta)
+            currentURL = DocStore.shared.selectedURL
+        }
+        panel.reloadData()
+        return true
+    }
 }

@@ -72,9 +72,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     return true
                 case 125: // ↓
                     DocStore.shared.moveSelection(by: 1)
+                    QuickLook.shared.refreshIfVisible()  // 미리보기 열려 있으면 따라 갱신
                     return true
                 case 126: // ↑
                     DocStore.shared.moveSelection(by: -1)
+                    QuickLook.shared.refreshIfVisible()
                     return true
                 default:
                     return false

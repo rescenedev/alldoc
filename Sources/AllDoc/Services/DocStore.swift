@@ -12,8 +12,9 @@ final class DocStore: ObservableObject {
     @Published private(set) var managedFolders: [SidebarLocation]
     @Published var selectedLocationID: String?
 
-    // 즐겨찾기 (파일 경로, 영구 저장)
+    // 즐겨찾기 (파일 경로, 영구 저장). 조회는 Set 으로 O(1).
     @Published private(set) var favorites: [String] = []
+    private var favoriteSet: Set<String> = []
     private let favKey = "AllDoc.favorites.v1"
 
     // 필터 / 정렬 / 보기
@@ -27,9 +28,26 @@ final class DocStore: ObservableObject {
     @Published private(set) var nameEnabled = true
     @Published private(set) var contentEnabled = true
 
-    /// ⌘K 등으로 검색창 포커스를 요청할 때 증가하는 신호.
+    /// ⌘K 등으로 검색창 포커스를 요청할 때 증가하는 신호. (테두리 강조용 @FocusState)
     @Published var focusSearchPulse = 0
-    func focusSearch() { focusSearchPulse &+= 1 }
+    func focusSearch() {
+        focusSearchPulse &+= 1
+        // 툴바의 검색 TextField 는 @FocusState 만으로 포커스가 안 잡혀 AppKit 으로 직접 지정.
+        guard let window = NSApp.keyWindow ?? NSApp.windows.first(where: { $0.isVisible }) else { return }
+        let root = window.contentView?.superview ?? window.contentView
+        if let field = DocStore.firstEditableTextField(in: root) {
+            window.makeFirstResponder(field)
+        }
+    }
+
+    private static func firstEditableTextField(in view: NSView?) -> NSTextField? {
+        guard let view else { return nil }
+        if let tf = view as? NSTextField, tf.isEditable { return tf }
+        for sub in view.subviews {
+            if let f = firstEditableTextField(in: sub) { return f }
+        }
+        return nil
+    }
 
     /// 토글. 단, 둘 다 꺼지는 것은 막는다(최소 하나 유지).
     func toggleName() {
@@ -71,6 +89,7 @@ final class DocStore: ObservableObject {
             managedFolders = [makeLocation(url)]
         }
         favorites = (UserDefaults.standard.array(forKey: favKey) as? [String]) ?? []
+        favoriteSet = Set(favorites)
         selectedLocationID = DocStore.allID   // 기본: 전체 폴더
         reload()
     }
@@ -84,11 +103,12 @@ final class DocStore: ObservableObject {
 
     // MARK: - 즐겨찾기
 
-    func isFavorite(_ file: DocFile) -> Bool { favorites.contains(file.url.path) }
+    func isFavorite(_ file: DocFile) -> Bool { favoriteSet.contains(file.url.path) }
 
     func toggleFavorite(_ file: DocFile) {
         let p = file.url.path
-        if let i = favorites.firstIndex(of: p) { favorites.remove(at: i) } else { favorites.append(p) }
+        if let i = favorites.firstIndex(of: p) { favorites.remove(at: i); favoriteSet.remove(p) }
+        else { favorites.append(p); favoriteSet.insert(p) }
         UserDefaults.standard.set(favorites, forKey: favKey)
         if isFavoritesMode { refresh() }
     }
@@ -353,6 +373,14 @@ final class DocStore: ObservableObject {
     }
 
     var firstSelectableID: DocFile.ID? { items.first?.id }
+
+    /// 파일 클릭 선택. 검색창에 있던 포커스를 떼어 Space=미리보기 / 화살표=이동이 바로 되게 한다(Finder 동일).
+    func select(_ id: DocFile.ID) {
+        selection = id
+        if let window = NSApp.keyWindow, window.firstResponder is NSText {
+            window.makeFirstResponder(nil)
+        }
+    }
 
     /// 화살표 키 이동: 현재 선택 기준 delta(±1) 만큼 이동.
     func moveSelection(by delta: Int) {

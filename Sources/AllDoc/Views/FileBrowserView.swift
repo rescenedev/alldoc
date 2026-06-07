@@ -36,7 +36,7 @@ struct FileBrowserView: View {
                                 .padding(.horizontal, 6)
                         )
                         .contentShape(Rectangle())
-                        .onTapGesture { store.selection = file.id }
+                        .onTapGesture { store.select(file.id) }
                         .simultaneousGesture(TapGesture(count: 2).onEnded { store.open(file) })
                         .contextMenu { FileContextMenu(file: file) }
                 }
@@ -59,7 +59,7 @@ struct FileBrowserView: View {
                 ForEach(store.items) { file in
                     FileGridItem(file: file, isSelected: store.selection == file.id)
                         .contentShape(Rectangle())
-                        .onTapGesture { store.selection = file.id }
+                        .onTapGesture { store.select(file.id) }
                         .simultaneousGesture(TapGesture(count: 2).onEnded { store.open(file) })
                         .contextMenu { FileContextMenu(file: file) }
                 }

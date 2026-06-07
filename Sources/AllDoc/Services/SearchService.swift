@@ -187,7 +187,7 @@ enum SearchService {
             extractor.flush()
             if emitted >= maxResults { break }
         }
-        extractor.flush()
+        extractor.flush(force: true)
     }
 
     // MARK: - 특정 파일 집합(즐겨찾기 등) 안에서 검색
@@ -239,7 +239,7 @@ enum SearchService {
                 for await r in group { if let r { out.append(r) } }
                 return out
             }
-            extractor.flush()
+            extractor.flush(force: true)
             if !pairs.isEmpty {
                 let shadowToOrig = Dictionary(pairs, uniquingKeysWith: { a, _ in a })
                 let matches = try await rgMatches(pattern: trimmed.decomposedStringWithCanonicalMapping,
@@ -275,7 +275,7 @@ enum SearchService {
         let extractor = TextExtractor.shared
 
         for chunk in files.chunked(into: 16) {
-            if Task.isCancelled { extractor.flush(); return }
+            if Task.isCancelled { extractor.flush(force: true); return }
             await withTaskGroup(of: Void.self) { group in
                 for path in chunk {
                     group.addTask {
@@ -288,7 +288,7 @@ enum SearchService {
             }
             extractor.flush()
         }
-        extractor.flush()
+        extractor.flush(force: true)
     }
 
     // MARK: - 보조

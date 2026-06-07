@@ -21,6 +21,7 @@ final class TextExtractor: @unchecked Sendable {
     private let lock = NSLock()
     private var index: [String: ShadowEntry] = [:]   // sha → 원본 정보
     private var dirty = false
+    private var lastFlush = Date.distantPast
 
     struct ShadowEntry: Codable {
         let path: String
@@ -68,12 +69,15 @@ final class TextExtractor: @unchecked Sendable {
         return index[sha]?.path
     }
 
-    /// 변경된 인덱스를 디스크에 기록(청크 단위로 호출해 쓰기 횟수를 줄임).
-    func flush() {
+    /// 변경된 인덱스를 디스크에 기록. 잦은 호출 시 2초 간격으로 합쳐(coalesce) 전체-재기록 비용을 줄인다.
+    /// `force: true` 면 즉시 기록(작업 종료 시점에 사용).
+    func flush(force: Bool = false) {
         lock.lock()
         guard dirty else { lock.unlock(); return }
+        if !force, Date().timeIntervalSince(lastFlush) < 2.0 { lock.unlock(); return }
         let snapshot = index
         dirty = false
+        lastFlush = Date()
         lock.unlock()
         if let data = try? JSONEncoder().encode(snapshot) {
             try? data.write(to: indexURL)
