@@ -39,9 +39,11 @@
     padding:12px 76px 12px 16px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px;color:#cdd9e5;
     cursor:pointer;transition:.15s;text-align:left}
   code.cmd:hover{border-color:var(--accent)}
-  code.cmd .copy{position:absolute;top:8px;right:8px;font-size:11px;font-family:-apple-system,sans-serif;
+  code.cmd .copy{position:absolute;top:50%;right:10px;transform:translateY(-50%);
+    display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;
     color:var(--accent);background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.35);
-    border-radius:6px;padding:4px 9px;user-select:none;font-size:13px;line-height:1}
+    border-radius:6px;user-select:none}
+  code.cmd .copy svg{width:15px;height:15px;display:block}
   code.cmd.copied{border-color:rgba(40,200,64,.45)}
   code.cmd.copied .copy{color:#28c840;background:rgba(40,200,64,.1);border-color:rgba(40,200,64,.4)}
 
@@ -104,7 +106,7 @@
       <a class="btn btn-primary" href="https://github.com/rescenedev/alldoc">GitHub에서 보기</a>
       <a class="btn btn-ghost" href="#install">설치하기</a>
     </div>
-    <div class="install"><code class="cmd" data-copy="brew install rescenedev/tap/alldoc">brew install rescenedev/tap/alldoc<span class="copy" aria-label="복사">📋</span></code></div>
+    <div class="install"><code class="cmd" data-copy="brew install rescenedev/tap/alldoc">brew install rescenedev/tap/alldoc<span class="copy" aria-label="복사"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span></code></div>
   </div>
 
   </header>
@@ -146,12 +148,12 @@
       <div class="card">
         <h3>Homebrew</h3>
         <p style="margin-bottom:12px">가장 간단한 방법입니다.</p>
-        <code class="cmd" data-copy="brew install rescenedev/tap/alldoc">brew install rescenedev/tap/alldoc<span class="copy" aria-label="복사">📋</span></code>
+        <code class="cmd" data-copy="brew install rescenedev/tap/alldoc">brew install rescenedev/tap/alldoc<span class="copy" aria-label="복사"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span></code>
       </div>
       <div class="card">
         <h3>소스 빌드</h3>
         <p style="margin-bottom:12px">macOS 14+, Swift 6 (Command Line Tools면 충분)</p>
-        <code class="cmd" data-copy="git clone https://github.com/rescenedev/alldoc.git&#10;cd alldoc &amp;&amp; ./build.sh release &amp;&amp; open build/AllDoc.app">git clone https://github.com/rescenedev/alldoc.git<br>cd alldoc &amp;&amp; ./build.sh release &amp;&amp; open build/AllDoc.app<span class="copy" aria-label="복사">📋</span></code>
+        <code class="cmd" data-copy="git clone https://github.com/rescenedev/alldoc.git&#10;cd alldoc &amp;&amp; ./build.sh release &amp;&amp; open build/AllDoc.app">git clone https://github.com/rescenedev/alldoc.git<br>cd alldoc &amp;&amp; ./build.sh release &amp;&amp; open build/AllDoc.app<span class="copy" aria-label="복사"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span></code>
       </div>
     </div>
     <div class="stack">
@@ -167,13 +169,15 @@
 </footer>
 
 <script>
+var ICON_COPY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+var ICON_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
 document.querySelectorAll('code.cmd').forEach(function(el){
   el.addEventListener('click', function(){
-    var text = el.getAttribute('data-copy') || el.innerText.replace(/복사$/,'').trim();
+    var text = (el.getAttribute('data-copy') || '').replace(/&#10;/g,'\n') || el.innerText.replace(/복사$/,'').trim();
     navigator.clipboard && navigator.clipboard.writeText(text);
     el.classList.add('copied');
-    var c = el.querySelector('.copy'); if(c) c.textContent='✅';
-    setTimeout(function(){ el.classList.remove('copied'); if(c) c.textContent='📋'; }, 1500);
+    var c = el.querySelector('.copy'); if(c) c.innerHTML = ICON_CHECK;
+    setTimeout(function(){ el.classList.remove('copied'); if(c) c.innerHTML = ICON_COPY; }, 1500);
   });
 });
 </script>
